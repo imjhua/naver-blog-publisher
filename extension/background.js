@@ -219,9 +219,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
             return true;
           };
-          // Keep the validated insertion path unchanged; do not toggle formatting before typing.
-          // Date styling is handled only after the complete body is present.
-          preBold = false;
+          // Restore the previously working path: enable bold before inserting
+          // the date, then disable it before inserting the URL.
+          // Post-insertion selection is unreliable in SmartEditor.
+          if (!resumeBody) preBold = await clickBold();
           if (resumeBody) {
             // Resume from the end of the existing URL, without duplicating it.
             for (const [type,key,code,virtual] of [
