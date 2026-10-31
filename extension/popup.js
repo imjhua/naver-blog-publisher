@@ -12,18 +12,36 @@ document.getElementById('fill').addEventListener('click', async () => {
     if (post.status !== 'approved' || typeof post.title !== 'string' || !post.title.startsWith('[요가 수련일지]') || !/^\d{4}-\d{2}-\d{2}$/.test(post.practiceDate) || typeof post.practiceType !== 'string' || typeof post.storeUrl !== 'string' || typeof post.content !== 'string') throw Error('승인된 게시글 JSON 형식이 아닙니다.');
     const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
     if (!tab?.id || !tab.url?.startsWith('https://blog.naver.com/')) throw Error('네이버 블로그 글쓰기 탭에서 실행해 주세요.');
-    const result = await chrome.scripting.executeScript({target:{tabId:tab.id,allFrames:true},func: () => {
-      if (location.hostname !== 'blog.naver.com') return {skip:true};
-      const visible = e => !!e.getClientRects().length;
-      const sample = (e) => ({tag:e.tagName.toLowerCase(),cls:String(e.className || '').slice(0,100),role:e.getAttribute('role'),editable:e.getAttribute('contenteditable'),placeholder:e.getAttribute('placeholder') || e.getAttribute('data-placeholder'),outer:e.outerHTML.slice(0,260)});
-      const candidates = [...document.querySelectorAll('[contenteditable], [role="textbox"], textarea, input, .se-title-text, .se-main-container, .se-text-paragraph, .se-component-content, .se-module-text, .se-placeholder')].filter(visible);
-      const title = [...document.querySelectorAll('.se-title-text [contenteditable="true"], .se-title-text .se-text-paragraph')].filter(visible);
-      const body = [...document.querySelectorAll('.se-main-container .se-component.se-text [contenteditable="true"], .se-main-container .se-component.se-text .se-text-paragraph')].filter(visible);
-      return {titleCount:title.length,bodyCount:body.length,framePath:location.pathname,documentReady:document.readyState,visibleCandidates:candidates.length,editorHints:{titleModules:document.querySelectorAll('.se-title-text').length,textModules:document.querySelectorAll('.se-module-text').length,bodyComponents:document.querySelectorAll('.se-component.se-text').length,bodyParagraphs:document.querySelectorAll('.se-component.se-text .se-text-paragraph').length,frames:document.querySelectorAll('iframe').length},samples:candidates.slice(0,18).map(sample)};
-    }});
-    // SmartEditor ONE uses nested editor frames; collect DOM hints only, never write.
-    const details = result.map(x=>x.result).filter(x=>x&&!x.skip);
-    status.textContent = '에디터 구조 진단 (입력·저장·발행 없음): '+JSON.stringify(details,null,2);
-
-  } catch (e) {status.textContent = '오류: '+e.message;}
+    const date = post.practiceDate.split('-').map(Number);
+    const bodyText = `${date[0]}년 ${date[1]}월 ${date[2]}일 · ${post.practiceType}\n${post.storeUrl}\n\n${post.content}`;
+    const results = await chrome.scripting.executeScript({
+      target:{tabId:tab.id,allFrames:true},
+      func: ({titleText,bodyText}) => {
+        if (location.hostname !== 'blog.naver.com') return {skip:true};
+        const title = document.querySelector('.se-title-text .se-text-paragraph');
+        const body = document.querySelector('.se-component.se-text .se-text-paragraph');
+        if (!title || !body) return {skip:true};
+        const hasContent = element => !!element.querySelector('.__se-node')?.textContent?.trim();
+        if (hasContent(title) || hasContent(body)) return {error:'이미 작성된 내용이 있어 입력하지 않았습니다.'};
+        const type = (element,text) => {
+          element.click();
+          element.focus();
+          const range = document.createRange();
+          const node = element.querySelector('.__se-node') || element;
+          range.selectNodeContents(node);
+          range.collapse(false);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          return document.execCommand('insertText',false,text);
+        };
+        const titleOK = type(title,titleText);
+        const bodyOK = type(body,bodyText);
+        return {titleCommand:titleOK,bodyCommand:bodyOK,titleVisible:document.querySelector('.se-title-text')?.innerText?.includes(titleText) || false,bodyVisible:document.querySelector('.se-component.se-text')?.innerText?.includes(bodyText.slice(0,12)) || false};
+      },
+      args:[{titleText:post.title,bodyText}]
+    });
+    const outcome = results.map(x=>x.result).filter(x=>x&&!x.skip);
+    status.textContent = '입력 테스트 결과 (저장·발행 없음): '+JSON.stringify(outcome,null,2)+'\n실제 글쓰기 화면의 제목·본문도 확인해 주세요.';
+  } catch(e) {status.textContent='오류: '+e.message;}
 });
