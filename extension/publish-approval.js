@@ -20,6 +20,9 @@
         const card=!!document.querySelector('.se-section-oglink,.se-module-oglink,.se-component-oglink,.se-component.se-oglink');
         const final=[...document.querySelectorAll('button[class*="confirm_btn__"]')].filter(visible)
           .filter(el=>el.textContent.trim()==='발행'&&!el.disabled);
+        const publishControls=[...document.querySelectorAll('button')].filter(visible)
+          .filter(el=>/발행/.test((el.textContent||'').trim())).slice(0,12)
+          .map(el=>({className:el.className,label:(el.textContent||'').trim().slice(0,60)}));
         const close=[...document.querySelectorAll('button[class*="publish_fold_btn__"]')].filter(visible);
         const settings=[...document.querySelectorAll('input[type="radio"],input[type="checkbox"],select')]
           .filter(visible).slice(0,25).map(el=>({
@@ -27,7 +30,7 @@
             label:(el.closest('label')?.innerText||el.getAttribute('aria-label')||el.name||'').trim().slice(0,100)
           }));
         return {title,date:date?.textContent.trim()||'',bold,url,card,
-          paragraphCount:ps.length,finalCount:final.length,settingsOpen:final.length===1,settings};
+          paragraphCount:ps.length,finalCount:final.length,settingsOpen:final.length===1,settings,publishControls,frameUrl:location.href};
       }
     });
     const results=frames.map(x=>x.result).filter(Boolean);
@@ -38,7 +41,9 @@
     const panels=results.filter(x=>x.finalCount>0);
     const panel=panels.length===1?panels[0]:null;
     return {...editor,settingsOpen:!!panel,finalCount:panel?.finalCount||0,
-      settings:panel?.settings||[],panelCount:panels.length};
+      settings:panel?.settings||[],panelCount:panels.length,
+      frameDiagnostics:results.map(x=>({title:!!x.title,finalCount:x.finalCount,
+        controls:x.publishControls,frameUrl:x.frameUrl}))};
   };
   const openSettings=async(tabId)=>{
     const frames=await chrome.scripting.executeScript({
@@ -77,6 +82,10 @@
         output.textContent='발행 설정을 자동으로 여는 중...';
         await openSettings(tab.id);
         state=await inspect(tab.id);
+        if(state&&!state.settingsOpen){
+          await new Promise(resolve=>setTimeout(resolve,450));
+          state=await inspect(tab.id);
+        }
       }
       if(!state)throw Error('글쓰기 내용을 확인하지 못했습니다.');
       output.textContent='발행 직전 확인\n제목: '+state.title+
@@ -87,6 +96,7 @@
         '\n발행 설정: '+(state.settingsOpen?'열림':'닫힘')+
         '\n최종 발행 버튼: '+state.finalCount+'개'+
         '\n선택 옵션: '+JSON.stringify(state.settings)+
+        (!state.settingsOpen?'\n프레임 진단: '+JSON.stringify(state.frameDiagnostics):'')+
         '\n아직 발행하지 않았습니다.';
       if(!state.title||!state.date||!state.bold||!state.url||!state.card||
          state.paragraphCount<4||!state.settingsOpen||state.finalCount!==1)
