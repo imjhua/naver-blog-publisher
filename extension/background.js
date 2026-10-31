@@ -1,3 +1,4 @@
+const activeFillTabs = new Set();
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== 'fill-approved-post') return;
   (async () => {
@@ -9,6 +10,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         typeof post.content !== 'string') throw new Error('승인 글 데이터가 올바르지 않습니다.');
     const [tab] = await chrome.tabs.query({active:true,lastFocusedWindow:true});
     if (!tab?.id) throw new Error('활성 탭을 찾지 못했습니다.');
+    if (activeFillTabs.has(tab.id)) {
+      sendResponse({ok:true,result:{status:'already-running'}});
+      return;
+    }
+    activeFillTabs.add(tab.id);
+    try {
     // First inspect the document, before injecting any editing code.
     const frames = await chrome.scripting.executeScript({
       target:{tabId:tab.id,allFrames:true},
@@ -128,7 +135,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       attached = true;
       for (const [field,value] of [['title',post.title],['body',body]]) {
         const prepared = await prepare(field);
-        if (prepared.status !== 'ready') {
+        if (field === 'title' && prepared.status === 'not-empty' && prepared.value === post.title) {
+          continue; // Already inserted by a prior run; never duplicate it.
+        }
+        if (prepared.status !== 'ready' && !(field === 'body' && prepared.status === 'not-empty')) {
           result = {status:field+'-'+prepared.status,diagnostics:prepared};
           break;
         }
@@ -149,6 +159,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           result = {status:field+'-frame-offset-missing'};
           break;
         }
+        let resumeBody = false;
+        if (field === 'body' && prepared.status === 'not-empty') {
+          const state = await chrome.scripting.executeScript({
+            target,
+            func:(date,url,content) => {
+              const paragraphs = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+                .map(p => (p.textContent || '').trim()).filter(Boolean);
+              const hasDate = paragraphs.some(p => p === date);
+              const hasUrl = paragraphs.some(p => p === url);
+              const prose = content.split('\\n').find(Boolean);
+              const hasProse = paragraphs.some(p => p.includes(prose));
+              const card = document.querySelector('.se-section-oglink, .se-module-oglink, .se-component.se-oglink, .se-component-oglink');
+              if (!hasDate || !hasUrl || hasProse || !card) return {safe:false,hasDate,hasUrl,hasProse,card:!!card};
+              card.scrollIntoView({block:'center'});
+              const rect = card.getBoundingClientRect();
+              return {safe:true,x:rect.left+Math.min(rect.width/2,70),y:rect.bottom+14};
+            },
+            args:[body.split('\\n')[0],post.storeUrl,post.content]
+          });
+          const stateResult = state[0]?.result;
+          if (!stateResult?.safe) {
+            result = {status:'body-resume-unsafe',diagnostics:stateResult};
+            break;
+          }
+          prepared.x = stateResult.x;
+          prepared.y = stateResult.y;
+          resumeBody = true;
+        }
         const x = offset.x+prepared.x, y = offset.y+prepared.y;
         await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});
         await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});
@@ -157,7 +195,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } else {
           // SmartEditor treats embedded newlines in Input.insertText as plain
           // characters. Send each line separately and use real Enter events.
-          const lines = value.split('\n');
+          const lines = resumeBody ? post.content.split('\n') : value.split('\n');
           for (let i = 0; i < lines.length; i++) {
             if (i > 0) {
               await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
@@ -170,7 +208,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (lines[i]) await chrome.debugger.sendCommand(debuggerTarget,'Input.insertText',{text:lines[i]});
             // The store preview is created asynchronously. Wait before typing
             // the prose, otherwise SmartEditor may append the card at the end.
-            if (i === 2 && lines[1] === post.storeUrl) {
+            if (!resumeBody && i === 2 && lines[1] === post.storeUrl) {
               const cardState = await waitForLinkCard();
               if (!cardState.ready) {
                 result = {status:'link-card-not-confirmed',diagnostics:cardState};
@@ -191,6 +229,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (attached) await chrome.debugger.detach(debuggerTarget).catch(()=>{});
     }
     sendResponse({ok:true,result});
+    } finally { activeFillTabs.delete(tab.id); }
   })().catch(error => sendResponse({ok:false,error:error.message}));
   return true;
 });
