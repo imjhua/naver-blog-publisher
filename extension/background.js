@@ -59,7 +59,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     };
     const confirm = async (field,value) => {
       const selector = field === 'title' ? config.title : config.body;
-      const firstLine = value.split('\\n')[0];
+      const firstLine = value.split('\n')[0];
       const end = Date.now() + config.waitMs;
       do {
         const results = await chrome.scripting.executeScript({
@@ -73,7 +73,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     };
     const [year,month,day] = post.practiceDate.split('-').map(Number);
     const body = year+'년 '+month+'월 '+day+'일 · '+post.practiceType+
-      '\\n'+post.storeUrl+'\\n\\n'+post.content;
+      '\n'+post.storeUrl+'\n\n'+post.content;
     const debuggerTarget = {tabId:tab.id};
     let attached = false;
     let result;
