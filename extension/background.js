@@ -61,10 +61,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const results = await chrome.scripting.executeScript({
           target,
           func:(field,expected) => {
-            const root = document.querySelector(field === 'title' ? '.se-title' : '.se-section-text');
-            if (!root) return {ok:false,reason:'root-missing'};
-            const paragraphs = [...root.querySelectorAll('.se-text-paragraph')]
-              .map(el => (el.textContent || '').trim());
+            const selector = field === 'title'
+              ? '.se-title-text .se-text-paragraph'
+              : '.se-section-text .se-module-text .se-text-paragraph';
+            const first = document.querySelector(selector);
+            if (!first) return {ok:false,reason:'selector-missing',selector};
+            const paragraphs = field === 'title'
+              ? [(first.textContent || '').trim()]
+              : [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+                  .map(el => (el.textContent || '').trim());
             if (field === 'title') return {ok:paragraphs.join(' ').includes(expected),paragraphs};
             const expectedLines = expected.split('\n').filter(Boolean);
             const visible = paragraphs.join(' ');
