@@ -32,6 +32,27 @@
     });
     return frames.map(x=>x.result).find(x=>x?.title)||null;
   };
+  const openSettings=async(tabId)=>{
+    const frames=await chrome.scripting.executeScript({
+      target:{tabId,allFrames:true},
+      func:()=>{
+        if(!location.pathname.includes('PostWriteForm.naver'))return null;
+        const visible=el=>!!el.getClientRects().length&&getComputedStyle(el).visibility!=='hidden';
+        const close=[...document.querySelectorAll('button[class*="publish_fold_btn__"]')].filter(visible);
+        if(close.length)return {status:'already-open'};
+        const launch=[...document.querySelectorAll('button[class*="publish_btn__"]')]
+          .filter(visible).filter(el=>el.textContent.trim()==='발행'&&!el.disabled);
+        if(launch.length!==1)return {status:'launcher-not-unique',count:launch.length};
+        if(launch[0].closest('[role="dialog"],[aria-modal="true"],[class*="modal"],[class*="layer"]'))
+          return {status:'unsafe-launch-context'};
+        launch[0].click();
+        return {status:'opened'};
+      }
+    });
+    const results=frames.map(x=>x.result).filter(Boolean);
+    if(results.length!==1||!['opened','already-open'].includes(results[0].status))
+      throw Error('발행 설정을 안전하게 열지 못했습니다: '+JSON.stringify(results));
+  };
   review.addEventListener('click',async()=>{
     submit.disabled=true;
     approvedSnapshot=null;
@@ -39,7 +60,12 @@
     try{
       const [tab]=await chrome.tabs.query({active:true,lastFocusedWindow:true});
       if(!tab?.id||!tab.url?.startsWith('https://blog.naver.com/'))throw Error('네이버 블로그 글쓰기 탭이 필요합니다.');
-      const state=await inspect(tab.id);
+      let state=await inspect(tab.id);
+      if(state&&!state.settingsOpen){
+        output.textContent='발행 설정을 자동으로 여는 중...';
+        await openSettings(tab.id);
+        state=await inspect(tab.id);
+      }
       if(!state)throw Error('글쓰기 내용을 확인하지 못했습니다.');
       output.textContent='발행 직전 확인\n제목: '+state.title+
         '\n날짜: '+state.date+'\n날짜 볼드: '+(state.bold?'확인':'미확인')+
