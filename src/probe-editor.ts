@@ -6,7 +6,8 @@ const profile = process.env.NAVER_PROFILE_DIR ?? '.local/naver-profile';
 await mkdir(profile, { recursive: true });
 const browser = await chromium.launchPersistentContext(profile, { headless: false });
 const page = await browser.newPage();
-await page.goto('https://blog.naver.com/', { waitUntil: 'domcontentloaded' });
+const blogUrl = process.env.NAVER_BLOG_URL ?? 'https://blog.naver.com/my-mysore';
+await page.goto(blogUrl, { waitUntil: 'domcontentloaded' });
 console.log('Sign in yourself and navigate to your blog editor. Press Enter here when ready.');
 await new Promise<void>(resolve => process.stdin.once('data', () => resolve()));
 
