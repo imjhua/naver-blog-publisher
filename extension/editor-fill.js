@@ -21,7 +21,16 @@ function fillApprovedPostInFrame(post) {
     const selection = window.getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
-    return document.execCommand('insertText',false,value);
+    // SmartEditor may reject insertText. Try HTML insertion as a fallback,
+    // preserving plain text only; never interpolate unescaped markup.
+    const inserted = document.execCommand('insertText', false, value);
+    if (inserted && el.textContent?.includes(value)) return true;
+    if (el.textContent?.includes(value)) return true;
+    const escapeHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const html = value.split('\\n').map(escapeHtml).join('<br>');
+    return document.execCommand('insertHTML', false, html) &&
+      !!el.textContent?.includes(value.split('\\n')[0]);
   }
   // Input only. The SmartEditor may reject synthetic editing commands.
   if (!typeInto(title,post.title)) return {status:'title-command-failed'};
