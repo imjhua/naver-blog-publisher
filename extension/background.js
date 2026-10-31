@@ -332,18 +332,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const p=[...document.querySelectorAll('.se-section-text .se-text-paragraph')]
               .find(el=>(el.textContent||'').trim()===date);
             if (!p) return false;
-            const spans=[...p.querySelectorAll('span.__se-node')];
-            return spans.length>0 && spans.every(el=>{
-              for(let node=el;node && node!==p.parentElement;node=node.parentElement){
-                if(node.nodeType!==1)continue;
-                if(node.matches('b,strong') || /(?:^|\\s)se-bold(?:\\s|$)/.test(node.className||'') ||
-                   Number.parseInt(getComputedStyle(node).fontWeight,10)>=600)return true;
+            // SmartEditor nests <b> inside span.__se-node and may split
+            // the date across multiple spans. Check the rendered text nodes,
+            // not the unstyled wrapping spans or a single full-date <b>.
+            const walker=document.createTreeWalker(p,NodeFilter.SHOW_TEXT);
+            const parts=[];
+            while(walker.nextNode()){
+              const node=walker.currentNode;
+              if(!node.textContent.trim()) continue;
+              let el=node.parentElement;
+              let bold=false;
+              while(el && el!==p.parentElement){
+                if(el.matches('b,strong') ||
+                   /(?:^|\s)(?:se-bold|se-text-format-bold)(?:\s|$)/.test(el.className||'') ||
+                   Number.parseInt(getComputedStyle(el).fontWeight,10)>=600){
+                  bold=true;break;
+                }
+                el=el.parentElement;
               }
-              return false;
-            });
+              parts.push({text:node.textContent,bold});
+            }
+            return parts.length>0 && parts.map(x=>x.text).join('').trim()===date &&
+              parts.every(x=>x.bold);
           },
-          args:[body.split('\\n')[0]]
+          args:[body.split('\n')[0]]
         }))[0]?.result;
+
         if (alreadyBold) {
           result={status:'input-visible',formatting:'date-bold-confirmed'};
         }
