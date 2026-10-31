@@ -7,11 +7,11 @@ h1{font-size:15px;margin:0}
 small{display:block;color:#666;margin-top:8px}
 </style></head>
 <body>
-<h1>나의 마이솔 · 자동 입력</h1>
-<p id="status" role="status" aria-live="polite">승인 글을 불러오는 중...</p>
-<small>네이버 글쓰기 화면에서 실행하세요. 저장·발행은 하지 않습니다.</small>
-<button id="reviewFinalPublish" type="button" style="margin-top:14px;width:100%;padding:10px;font-weight:600">검토 후 발행 진행</button>
-<p style="font-size:12px;color:#666">내용과 발행 설정을 자동 확인한 뒤, 최종 확인창에서 승인해야 실제 발행됩니다.</p>
+<h1>나의 마이솔 · 자동 발행</h1>
+<p id="status" role="status" aria-live="polite">승인된 새 글을 확인하고 자동 발행을 준비하는 중...</p>
+<small>네이버 글쓰기 화면에서 확장 프로그램을 열면 승인된 새 글을 검증 후 자동 발행합니다. 이미 발행된 글은 차단합니다.</small>
+<button id="reviewFinalPublish" type="button" style="margin-top:14px;width:100%;padding:10px;font-weight:600">수동 재검토 (문제 해결용)</button>
+<p style="font-size:12px;color:#666">정상 흐름에서는 추가 버튼을 누르지 않아도 실제 발행됩니다. 실패 시 아래 진단 도구를 사용하세요.</p>
 <button id="confirmFinalPublish" type="button" disabled hidden>승인하고 실제 발행</button>
 <pre id="finalPublishStatus" role="status" style="white-space:pre-wrap;overflow-wrap:anywhere;font:12px system-ui;max-height:220px;overflow:auto"></pre>
 <details style="margin-top:14px"><summary>진단 도구 (발행 안 함)</summary>
