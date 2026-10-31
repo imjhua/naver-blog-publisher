@@ -1,12 +1,15 @@
 {
   "manifest_version": 3,
   "name": "My Mysore Blog Draft Helper",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Fill a reviewed yoga journal draft in the owner's Naver Blog editor. Never publishes automatically.",
   "permissions": [
     "clipboardWrite"
   ],
   "action": {
     "default_popup": "popup.html"
-  }
+  },
+  "host_permissions": [
+    "https://raw.githubusercontent.com/*"
+  ]
 }
