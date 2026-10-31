@@ -32,6 +32,18 @@ chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === ALARM_NAME) void checkLatest();
 });
 chrome.runtime.onMessage.addListener((message,sender,sendResponse) => {
+  if (message?.type === 'test-new-badge') {
+    (async () => {
+      const response = await fetch('https://raw.githubusercontent.com/imjhua/naver-blog-publisher/main/tests/notification-signal.json',{cache:'no-store'});
+      if (!response.ok) throw new Error('테스트 데이터 요청 실패: ' + response.status);
+      const fixture = await response.json();
+      if (fixture.kind !== 'notification-test' || typeof fixture.id !== 'string') throw new Error('테스트 데이터 형식 오류');
+      await chrome.action.setBadgeBackgroundColor({color:'#246b46'});
+      await chrome.action.setBadgeText({text:'NEW'});
+      sendResponse({ok:true,id:fixture.id});
+    })().catch(error => sendResponse({ok:false,error:error.message}));
+    return true;
+  }
   if (message?.type !== 'approved-post-loaded') return;
   (async () => {
     const signature = message.post.id + ':' + message.post.title + ':' + message.post.content;
