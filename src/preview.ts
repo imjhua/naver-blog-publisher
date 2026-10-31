@@ -1,0 +1,11 @@
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { formatPost } from './format-post.js';
+const input = process.argv[2];
+if (!input) throw new Error('Usage: npx tsx src/preview.ts posts/example.json');
+const post = JSON.parse(readFileSync(input, 'utf8'));
+const formatted = formatPost(post);
+mkdirSync('artifacts', { recursive: true });
+const output = join('artifacts', 'post-preview.txt');
+writeFileSync(output, `${formatted.title}\n\n${formatted.body}\n`, 'utf8');
+console.log(`Preview saved to ${output}; no browser or publish action was performed.`);
