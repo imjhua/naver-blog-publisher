@@ -11,7 +11,7 @@ const status = document.getElementById('status');
     if (post.status !== 'approved' ||
         typeof post.title !== 'string' || !post.title.startsWith('[요가 수련일지]') ||
         typeof post.content !== 'string' || !post.content.trim() ||
-        !/^\\d{4}-\\d{2}-\\d{2}$/.test(post.practiceDate) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(post.practiceDate) ||
         typeof post.practiceType !== 'string' ||
         typeof post.storeUrl !== 'string' || !post.storeUrl.startsWith('https://')) {
       throw new Error('승인된 글 형식이 올바르지 않습니다.');
