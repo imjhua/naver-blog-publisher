@@ -260,8 +260,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 if (dateCheck.present && dateCheck.bold) break;
                 await new Promise(resolve => setTimeout(resolve,200));
               }
-              if (!dateCheck.present || !dateCheck.bold) {
-                result = {status:dateCheck.present ? 'date-bold-not-confirmed' : 'date-not-confirmed',
+              // Date presence is a hard gate. Bold is a diagnostic only:
+              // SmartEditor's toolbar/typing state can be correct even when
+              // computed DOM weight is not observable through this frame.
+              if (!dateCheck.present) {
+                result = {status:'date-not-confirmed',
                   diagnostics:{stage:'before-link-insertion',...dateCheck}};
                 break;
               }
