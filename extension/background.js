@@ -218,8 +218,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           };
           if (!resumeBody) preBold = await clickBold();
           const lines = resumeBody ? post.content.split('\n') : value.split('\n');
+          let nextParagraphPrepared = false;
           for (let i = 0; i < lines.length; i++) {
-            if (i > 0) {
+            const skipEnter = i === 1 && nextParagraphPrepared;
+            if (skipEnter) nextParagraphPrepared = false;
+            if (i > 0 && !skipEnter) {
               await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
                 type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13
               });
@@ -270,8 +273,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               }
             }
             if (!resumeBody && i === 0 && preBold) {
-              // Turn bold off before the URL paragraph begins.
+              // Create the URL paragraph while the date editor still owns focus.
+              // Clicking the toolbar can steal focus; after toggling bold off,
+              // explicitly focus the new empty paragraph before inserting the URL.
+              const enter = async type => chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
+                type,key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13
+              });
+              await enter('keyDown');
+              await enter('keyUp');
               await clickBold();
+              const next = (await chrome.scripting.executeScript({
+                target,
+                func:(date) => {
+                  const ps=[...document.querySelectorAll('.se-section-text .se-text-paragraph')];
+                  const idx=ps.findIndex(p=>(p.textContent||'').trim()===date);
+                  const p=idx>=0 ? ps[idx+1] : null;
+                  if(!p || (p.textContent||'').trim()) return null;
+                  p.scrollIntoView({block:'center'});
+                  const r=p.getBoundingClientRect();
+                  return r.width && r.height ? {x:r.left+Math.min(12,r.width/2),y:r.top+r.height/2} : null;
+                },
+                args:[lines[0]]
+              }))[0]?.result;
+              if(!next) {
+                result={status:'url-paragraph-not-ready',diagnostics:{stage:'after-date'}};
+                break;
+              }
+              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+                type:'mousePressed',x:offset.x+next.x,y:offset.y+next.y,button:'left',clickCount:1
+              });
+              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+                type:'mouseReleased',x:offset.x+next.x,y:offset.y+next.y,button:'left',clickCount:1
+              });
+              nextParagraphPrepared=true;
             }
             // The store preview is created asynchronously. Wait before typing
             // the prose, otherwise SmartEditor may append the card at the end.
