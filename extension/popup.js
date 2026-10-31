@@ -60,7 +60,7 @@ document.getElementById('autoFill').addEventListener('click', async () => {
     });
     const results = await chrome.scripting.executeScript({
       target:{tabId:tab.id,allFrames:true},
-      func:(approved) => fillApprovedPostInFrame(approved),
+      func:(approved) => globalThis.fillApprovedPostInFrame?.(approved) ?? {status:'not-editor-frame'},
       args:[post]
     });
     const outcomes = results.map(item => item.result).filter(Boolean);
