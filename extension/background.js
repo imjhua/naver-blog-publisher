@@ -267,9 +267,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             };
             await key('Home','Home');
             await key('End','End',8);
-            selectionText = (await chrome.scripting.executeScript({
-              target,func:() => window.getSelection()?.toString() || ''
-            }))[0]?.result || '';
+            // SmartEditor stores the active text selection inside a nested
+            // same-origin editing iframe, not necessarily in this frame's window.
+            const selectionState = (await chrome.scripting.executeScript({
+              target,
+              func:() => {
+                const selections = [];
+                const visit = (win,depth) => {
+                  if (depth > 4) return;
+                  try {
+                    const selected = win.getSelection()?.toString() || '';
+                    if (selected) selections.push(selected);
+                    for (const frame of win.document.querySelectorAll('iframe')) {
+                      if (frame.contentWindow) visit(frame.contentWindow,depth+1);
+                    }
+                  } catch (_) { /* cross-origin frame */ }
+                };
+                visit(window,0);
+                return selections;
+              }
+            }))[0]?.result || [];
+            selectionText = selectionState.find(s => s.trim() === date) || selectionState[0] || '';
             if (selectionText.trim() === date) {
               const mac = (await chrome.scripting.executeScript({
                 target,func:() => /Mac/i.test(navigator.platform)
