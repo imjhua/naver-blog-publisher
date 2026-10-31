@@ -1,5 +1,12 @@
 const status = document.getElementById('status');
 let post = null;
+document.getElementById('testBadge').addEventListener('click', async () => {
+  try {
+    const result = await chrome.runtime.sendMessage({type:'test-new-badge'});
+    if (!result?.ok) throw new Error(result?.error || '알림 테스트 실패');
+    status.textContent = '테스트 NEW 배지를 표시했어요. 팝업을 닫고 Chrome 툴바의 확장 아이콘을 확인하세요.';
+  } catch(error) {status.textContent = '오류: ' + error.message;}
+});
 document.getElementById('file').addEventListener('change', async event => {
   post = null;
   try {
