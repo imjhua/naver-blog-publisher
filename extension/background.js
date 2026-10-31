@@ -342,15 +342,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 const p = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
                   .find(el => (el.textContent || '').trim() === date);
                 if (!p) return {bold:false,reason:'date-missing'};
-                const leaf = [...p.querySelectorAll('*')].find(el =>
-                  el.childElementCount === 0 && (el.textContent || '').trim() === date
-                ) || p;
-                const style = window.getComputedStyle(leaf);
-                const weight = Number.parseInt(style.fontWeight,10);
-                const markup = [...p.querySelectorAll('b,strong,.se-bold,[style*="font-weight"],[class*="bold"]')]
-                  .some(el => (el.textContent || '').trim() === date);
-                return {bold:markup || weight >= 600,markup,weight:style.fontWeight,
-                  leafTag:leaf.tagName,leafClass:leaf.className || ''};
+                const descendants = [p,...p.querySelectorAll('*')];
+                const styled = descendants.map(el => ({
+                  tag:el.tagName,
+                  className:typeof el.className === 'string' ? el.className.slice(0,180) : '',
+                  weight:getComputedStyle(el).fontWeight,
+                  text:(el.textContent||'').trim().slice(0,65)
+                }));
+                const strong = styled.filter(x => Number.parseInt(x.weight,10)>=600 ||
+                  /(?:^|\\s)(?:se-bold|se-text-format-bold)(?:\\s|$)/.test(x.className) ||
+                  x.tag==='STRONG' || x.tag==='B');
+                return {bold:strong.some(x => x.text===date),
+                  paragraphWeight:getComputedStyle(p).fontWeight,
+                  strong,structure:styled.slice(0,15),
+                  html:p.innerHTML.slice(0,1800)};
+
               },
               args:[date]
             }))[0]?.result;
