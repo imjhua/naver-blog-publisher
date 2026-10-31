@@ -189,35 +189,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // SmartEditor treats embedded newlines in Input.insertText as plain
           // characters. Send each line separately and use real Enter events.
           const lines = resumeBody ? post.content.split('\n') : value.split('\n');
-          const platform = await chrome.scripting.executeScript({
-            target,func:() => /Mac/i.test(navigator.platform)
-          });
-          const mac = !!platform[0]?.result;
-          const modifier = mac ? 4 : 2;
-          const keyShortcut = async (key,code) => {
-            await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
-              type:'keyDown',key,code,modifiers:modifier,
-              windowsVirtualKeyCode:key.toUpperCase().charCodeAt(0)
-            });
-            await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
-              type:'keyUp',key,code,modifiers:modifier,
-              windowsVirtualKeyCode:key.toUpperCase().charCodeAt(0)
-            });
-          };
-          const typeStyledLine = async (line,italic) => {
-            if (italic) await keyShortcut('i','KeyI');
-            const parts = line.split(/(\\*\\*[^*]+\\*\\*)/g);
-            for (const part of parts) {
-              if (!part) continue;
-              const bold = /^\\*\\*[^*]+\\*\\*$/.test(part);
-              if (bold) await keyShortcut('b','KeyB');
-              await chrome.debugger.sendCommand(debuggerTarget,'Input.insertText',{
-                text:bold ? part.slice(2,-2) : part
-              });
-              if (bold) await keyShortcut('b','KeyB');
-            }
-            if (italic) await keyShortcut('i','KeyI');
-          };
           for (let i = 0; i < lines.length; i++) {
             if (i > 0) {
               await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
@@ -227,7 +198,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13
               });
             }
-            if (lines[i]) await typeStyledLine(lines[i],!resumeBody && i === 0);
+            if (lines[i]) await chrome.debugger.sendCommand(debuggerTarget,'Input.insertText',{text:lines[i].replace(/\*\*([^*]+)\*\*/g,'$1')});
             // The store preview is created asynchronously. Wait before typing
             // the prose, otherwise SmartEditor may append the card at the end.
             if (!resumeBody && i === 2 && lines[1] === post.storeUrl) {
@@ -246,7 +217,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           break;
         }
       }
-      if (!result) result = {status:'input-visible',method:'debugger-Input.insertText',formatting:'keyboard-shortcuts-attempted'};
+      if (!result) result = {status:'input-visible',method:'debugger-Input.insertText',formatting:'not-applied'};
     } finally {
       if (attached) await chrome.debugger.detach(debuggerTarget).catch(()=>{});
     }
