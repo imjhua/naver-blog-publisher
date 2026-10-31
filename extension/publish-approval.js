@@ -50,7 +50,10 @@
       }
     });
     const results=frames.map(x=>x.result).filter(Boolean);
-    if(results.length!==1||!['opened','already-open'].includes(results[0].status))
+    const success=results.filter(x=>['opened','already-open'].includes(x.status));
+    // Naver may have multiple PostWriteForm frames. Ignore non-editor frames
+    // without a launcher; require exactly one successful editor frame.
+    if(success.length!==1)
       throw Error('발행 설정을 안전하게 열지 못했습니다: '+JSON.stringify(results));
   };
   review.addEventListener('click',async()=>{
