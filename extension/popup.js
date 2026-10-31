@@ -46,6 +46,36 @@ document.getElementById('loadGithub').addEventListener('click', async () => {
     status.textContent = '최신 승인 글 불러오기 완료: ' + post.title;
   } catch(error) {status.textContent = '오류: ' + error.message;}
 });
+document.getElementById('autoFill').addEventListener('click', async () => {
+  try {
+    ensurePost();
+    const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
+    if (!tab?.id || !tab.url?.startsWith('https://blog.naver.com/')) {
+      throw new Error('네이버 블로그 글쓰기 탭에서만 실행할 수 있습니다.');
+    }
+    status.textContent = '빈 에디터인지 확인하고 입력하는 중...';
+    await chrome.scripting.executeScript({
+      target:{tabId:tab.id,allFrames:true},files:['editor-fill.js']
+    });
+    const results = await chrome.scripting.executeScript({
+      target:{tabId:tab.id,allFrames:true},
+      func:(approved) => fillApprovedPostInFrame(approved),
+      args:[post]
+    });
+    const outcomes = results.map(item => item.result).filter(Boolean);
+    const active = outcomes.filter(item => item.status !== 'not-editor-frame' && item.status !== 'not-visible');
+    if (active.length !== 1) {
+      throw new Error('편집기 인식 실패 또는 중복 감지: ' + JSON.stringify(active));
+    }
+    const result = active[0];
+    if (result.status !== 'input-visible') {
+      throw new Error('입력 미완료 (' + result.status + '). 화면을 확인하세요.');
+    }
+    status.textContent = '자동 입력 결과 확인 필요: 제목과 본문 텍스트가 감지됐습니다. 서식·링크 카드·줄바꿈을 직접 확인하세요. 저장·발행은 실행하지 않았습니다.';
+  } catch(error) {
+    status.textContent = '자동 입력 테스트 오류: ' + error.message + ' (기존 복사 기능 사용 가능)';
+  }
+});
 const ensurePost = () => {
   if (!post) throw new Error('먼저 승인된 JSON 파일을 선택하세요.');
 };
