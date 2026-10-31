@@ -103,21 +103,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const checks = await chrome.scripting.executeScript({
           target,
           func:(url) => {
-            const body = document.querySelector('.se-section-text');
             const link = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
               .find(p => (p.textContent || '').trim() === url);
-            const cards = [...document.querySelectorAll('.se-section-oglink, .se-module-oglink, .se-component.se-oglink, .se-component-oglink')];
+            const cards = [...document.querySelectorAll('.se-component.se-oglink, .se-component-oglink, .se-section-oglink')]
+              .filter(el => !el.parentElement?.closest('.se-component.se-oglink, .se-component-oglink, .se-section-oglink'));
             const card = cards.find(el => (el.textContent || '').includes('smartstore.naver.com')) || cards[0];
             if (!link || !card) return {ready:false,link:!!link,card:!!card};
-            const position = link.compareDocumentPosition(card);
-            const afterLink = !!(position & Node.DOCUMENT_POSITION_FOLLOWING);
-            const paragraphs = [...document.querySelectorAll('.se-section-text .se-text-paragraph')];
-            const firstProse = paragraphs.find(p => {
-              const value = (p.textContent || '').trim();
-              return value && value !== url && !/^\\d{4}년 /.test(value);
-            });
-            const beforeProse = !firstProse || !!(card.compareDocumentPosition(firstProse) & Node.DOCUMENT_POSITION_FOLLOWING);
-            return {ready:afterLink && beforeProse,afterLink,beforeProse,cardCount:cards.length};
+            const afterLink = !!(link.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING);
+            return {ready:afterLink,afterLink,cardCount:cards.length};
           },
           args:[post.storeUrl]
         });
@@ -168,7 +161,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 .map(p => (p.textContent || '').trim()).filter(Boolean);
               const hasDate = paragraphs.some(p => p === date);
               const hasUrl = paragraphs.some(p => p === url);
-              const prose = content.split('\\n').find(Boolean);
+              const prose = content.split('\n').find(Boolean);
               const hasProse = paragraphs.some(p => p.includes(prose));
               const card = document.querySelector('.se-section-oglink, .se-module-oglink, .se-component.se-oglink, .se-component-oglink');
               if (!hasDate || !hasUrl || hasProse || !card) return {safe:false,hasDate,hasUrl,hasProse,card:!!card};
@@ -176,7 +169,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               const rect = card.getBoundingClientRect();
               return {safe:true,x:rect.left+Math.min(rect.width/2,70),y:rect.bottom+14};
             },
-            args:[body.split('\\n')[0],post.storeUrl,post.content]
+            args:[body.split('\n')[0],post.storeUrl,post.content]
           });
           const stateResult = state[0]?.result;
           if (!stateResult?.safe) {
