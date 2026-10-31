@@ -29,7 +29,7 @@ document.getElementById('loadGithub').addEventListener('click', async () => {
     if (parsed.status !== 'approved' || typeof parsed.title !== 'string' ||
         !parsed.title.startsWith('[요가 수련일지]') ||
         typeof parsed.content !== 'string' || !parsed.content.trim() ||
-        !/^\\d{4}-\\d{2}-\\d{2}$/.test(parsed.practiceDate) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(parsed.practiceDate) ||
         typeof parsed.practiceType !== 'string' ||
         typeof parsed.storeUrl !== 'string' || !parsed.storeUrl.startsWith('https://')) {
       throw new Error('승인된 게시글 JSON 형식이 아닙니다.');
