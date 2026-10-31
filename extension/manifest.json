@@ -5,7 +5,8 @@
   "description": "Fill a reviewed yoga journal draft in the owner's Naver Blog editor. Never publishes automatically.",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "debugger"
   ],
   "host_permissions": [
     "https://blog.naver.com/*"
