@@ -217,7 +217,54 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           break;
         }
       }
-      if (!result) result = {status:'input-visible',method:'debugger-Input.insertText',formatting:'not-applied'};
+      if (!result) {
+        // Format only after all paragraphs have been inserted successfully.
+        // Selecting the text is safe; a keyboard shortcut is only attempted
+        // when the date paragraph is uniquely identified.
+        const selected = await chrome.scripting.executeScript({
+          target,
+          func:(date) => {
+            const matches = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+              .filter(p => (p.textContent || '').trim() === date);
+            if (matches.length !== 1) return {ok:false,reason:'date-paragraph-not-unique',count:matches.length};
+            const paragraph = matches[0];
+            const range = document.createRange();
+            range.selectNodeContents(paragraph);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            return {ok:selection.toString().trim() === date};
+          },
+          args:[body.split('\n')[0]]
+        });
+        const dateSelected = !!selected[0]?.result?.ok;
+        let dateBold = false;
+        if (dateSelected) {
+          const mac = (await chrome.scripting.executeScript({
+            target,func:() => /Mac/i.test(navigator.platform)
+          }))[0]?.result;
+          const modifiers = mac ? 4 : 2;
+          await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
+            type:'keyDown',key:'b',code:'KeyB',modifiers,windowsVirtualKeyCode:66
+          });
+          await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
+            type:'keyUp',key:'b',code:'KeyB',modifiers,windowsVirtualKeyCode:66
+          });
+          const verified = await chrome.scripting.executeScript({
+            target,
+            func:(date) => {
+              const paragraph = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+                .find(p => (p.textContent || '').trim() === date);
+              return !!paragraph && [...paragraph.querySelectorAll('b,strong,.se-bold')]
+                .some(el => (el.textContent || '').trim() === date);
+            },
+            args:[body.split('\n')[0]]
+          });
+          dateBold = !!verified[0]?.result;
+        }
+        result = {status:'input-visible',method:'debugger-Input.insertText',
+          formatting:dateBold ? 'date-bold-confirmed' : 'date-bold-unconfirmed'};
+      }
     } finally {
       if (attached) await chrome.debugger.detach(debuggerTarget).catch(()=>{});
     }
