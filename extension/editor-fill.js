@@ -43,7 +43,22 @@ async function fillApprovedPostInFrame(post) {
     range.collapse(false);
     selection.removeAllRanges();
     selection.addRange(range);
+    const events = [];
+    const observe = event => {
+      if (events.length < 12) events.push({
+        type:event.type,
+        trusted:event.isTrusted,
+        inputType:event.inputType || null,
+        target:event.target?.tagName || null
+      });
+    };
+    for (const eventName of ['beforeinput','input','compositionstart','compositionend']) {
+      inputDoc.addEventListener(eventName,observe,true);
+    }
     const textResult = inputDoc.execCommand('insertText',false,value);
+    for (const eventName of ['beforeinput','input','compositionstart','compositionend']) {
+      inputDoc.removeEventListener(eventName,observe,true);
+    }
     // Wait for SmartEditor to reconcile its hidden input iframe with visible DOM.
     // Do not retry the insertion: the text may already be in the input buffer.
     for (let attempt = 0; attempt < 12; attempt++) {
@@ -53,7 +68,7 @@ async function fillApprovedPostInFrame(post) {
       await new Promise(resolve => setTimeout(resolve,250));
     }
     return {ok:false,diagnostics:{
-      ...diagnostics,textResult,
+      ...diagnostics,textResult,events,
       iframeText:inputTarget.textContent?.slice(0,80) || '',
       visibleText:el.textContent?.slice(0,80) || '',
       selectionCount:selection.rangeCount,
