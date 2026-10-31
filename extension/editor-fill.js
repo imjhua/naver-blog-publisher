@@ -12,35 +12,48 @@ function fillApprovedPostInFrame(post) {
   const content = year + '년 ' + month + '월 ' + day + '일 · ' + post.practiceType +
     '\n' + post.storeUrl + '\n\n' + post.content;
   function typeInto(el,value) {
+    // SmartEditor ONE uses a separate editable iframe for keyboard input.
+    // Clicking the visible paragraph transfers focus to that iframe.
     el.click();
-    el.focus();
     const active = document.activeElement;
-    const selection = window.getSelection();
-    const node = el.querySelector('span.__se-node') || el;
-    const range = document.createRange();
-    range.selectNodeContents(node);
+    const inputFrame = active?.tagName === 'IFRAME' ? active : null;
+    let inputDoc = null;
+    let inputTarget = null;
+    let frameError = null;
+    try {
+      inputDoc = inputFrame?.contentDocument || null;
+      inputTarget = inputDoc?.querySelector('body[contenteditable="true"]') || null;
+    } catch (error) {
+      frameError = error.message;
+    }
+    const diagnostics = {
+      activeTag: active?.tagName || null,
+      elementEditable: el.isContentEditable,
+      frameAccessible: !!inputDoc,
+      frameError,
+      frameEditable: !!inputTarget?.isContentEditable,
+      frameBodyPresent: !!inputTarget,
+      framePath: location.pathname
+    };
+    if (!inputTarget) return {ok:false,diagnostics};
+    inputTarget.focus();
+    const selection = inputDoc.getSelection();
+    const range = inputDoc.createRange();
+    range.selectNodeContents(inputTarget);
     range.collapse(false);
     selection.removeAllRanges();
     selection.addRange(range);
-    const before = {
-      activeTag: active?.tagName || null,
-      activeEditable: active?.getAttribute('contenteditable') || null,
-      elementEditable: el.isContentEditable,
-      nodeEditable: node.isContentEditable,
-      selectionCount: selection.rangeCount,
-      selectionInside: !!selection.anchorNode && el.contains(selection.anchorNode),
-      nodeTag: node.tagName,
-      frameUrlPath: location.pathname
-    };
-    const textResult = document.execCommand('insertText',false,value);
-    if (el.textContent?.includes(value)) return {ok:true,method:'insertText'};
-    const escapeHtml = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const html = value.split('\\n').map(escapeHtml).join('<br>');
-    const htmlResult = document.execCommand('insertHTML',false,html);
-    if (el.textContent?.includes(value.split('\\n')[0])) return {ok:true,method:'insertHTML'};
-    return {ok:false,diagnostics:{...before,textResult,htmlResult,
-      activeAfter:document.activeElement?.tagName || null,
-      selectedText:selection.toString().slice(0,60)}};
+    const textResult = inputDoc.execCommand('insertText',false,value);
+    if (el.textContent?.includes(value)) return {ok:true,method:'iframe-insertText'};
+    // The editor may update its visible document asynchronously.
+    // Report command acceptance separately; do not claim text was confirmed.
+    return {ok:false,diagnostics:{
+      ...diagnostics,textResult,
+      iframeText:inputTarget.textContent?.slice(0,80) || '',
+      visibleText:el.textContent?.slice(0,80) || '',
+      selectionCount:selection.rangeCount,
+      frameActiveTag:inputDoc.activeElement?.tagName || null
+    }};
   }
   // Input only. The SmartEditor may reject synthetic editing commands.
   const titleResult = typeInto(title,post.title);
