@@ -20,6 +20,25 @@ const status = document.getElementById('status');
     if (!tab?.id || !tab.url?.startsWith('https://blog.naver.com/')) {
       throw new Error('네이버 블로그 글쓰기 탭에서 실행하세요.');
     }
+    // Opening the popup for inspection must not rerun autofill on an existing draft.
+    const existing = await chrome.scripting.executeScript({
+      target:{tabId:tab.id,allFrames:true},
+      func:()=>{
+        const title=(document.querySelector('.se-title-text .se-text-paragraph')?.textContent||'').trim();
+        const paragraphs=[...document.querySelectorAll('.se-section-text .se-text-paragraph')];
+        return {title,hasDate:paragraphs.some(p=>/^\\d{4}년\\s+\\d{1,2}월\\s+\\d{1,2}일/.test((p.textContent||'').trim())),
+          hasUrl:paragraphs.some(p=>(p.textContent||'').includes('smartstore.naver.com')),
+          hasCard:!!document.querySelector('.se-section-oglink,.se-module-oglink,.se-component-oglink,.se-component.se-oglink')};
+      }
+    });
+    if(existing.some(x=>x.result?.title===post.title&&x.result?.hasDate&&x.result?.hasUrl&&x.result?.hasCard)){
+      status.textContent='이미 입력된 글이 확인됐습니다. 재입력하지 않았습니다. 발행 전 검토를 진행하세요.';
+      return;
+    }
+    if(existing.some(x=>x.result?.title||x.result?.hasDate||x.result?.hasUrl||x.result?.hasCard)){
+      status.textContent='기존 글 또는 일부 입력 내용이 있어 자동 입력을 중단했습니다. 현재 글을 확인하세요.';
+      return;
+    }
     status.textContent = '제목과 본문을 자동 입력하는 중...';
     const result = await chrome.runtime.sendMessage({type:'fill-approved-post',post});
     if (!result?.ok) throw new Error(result?.error || '입력 요청 실패');
