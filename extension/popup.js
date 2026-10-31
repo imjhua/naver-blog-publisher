@@ -2,12 +2,18 @@ const status = document.getElementById('status');
 (async () => {
   try {
     status.textContent = 'GitHub에서 최신 승인 글을 불러오는 중...';
+    // GitHub Contents API avoids stale raw.githubusercontent.com edge caches.
     const response = await fetch(
-      'https://raw.githubusercontent.com/imjhua/naver-blog-publisher/main/posts/latest.json?ts='+Date.now(),
-      {cache:'no-store'}
+      'https://api.github.com/repos/imjhua/naver-blog-publisher/contents/posts/latest.json?ref=main&t='+Date.now(),
+      {cache:'no-store',headers:{Accept:'application/vnd.github+json'}}
     );
     if (!response.ok) throw new Error('GitHub 요청 실패 (HTTP '+response.status+')');
-    const post = await response.json();
+    const file = await response.json();
+    if (file.encoding !== 'base64' || typeof file.content !== 'string')
+      throw new Error('GitHub 게시물 데이터 형식 오류');
+    const bytes = Uint8Array.from(atob(file.content.replace(/\\s/g,'')),c=>c.charCodeAt(0));
+    const post = JSON.parse(new TextDecoder().decode(bytes));
+    status.textContent = 'GitHub 승인 글 확인: '+post.id+' / '+post.title;
     if (post.status !== 'approved' ||
         typeof post.title !== 'string' || !post.title.startsWith('[요가 수련일지]') ||
         typeof post.content !== 'string' || !post.content.trim() ||
@@ -17,8 +23,8 @@ const status = document.getElementById('status');
       throw new Error('승인된 글 형식이 올바르지 않습니다.');
     }
     const {lastPublished}=await chrome.storage.local.get('lastPublished');
-    if(lastPublished?.id===post.id || (lastPublished?.title===post.title && lastPublished?.title && lastPublished?.title===post.title)){
-      status.textContent='이 브라우저에서 발행 완료를 확인한 글입니다. 재입력을 차단했습니다.\\n게시 URL: '+lastPublished.blogUrl;
+    if((lastPublished?.id && lastPublished.id===post.id) || (!lastPublished?.id && lastPublished?.title===post.title)){
+      status.textContent='이 브라우저에서 발행 완료를 확인한 글입니다 ('+post.id+'). 재입력을 차단했습니다.\n게시 URL: '+lastPublished.blogUrl;
       return;
     }
     // GitHub is the durable publication ledger. A published marker blocks
