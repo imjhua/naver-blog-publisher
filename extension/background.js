@@ -688,13 +688,13 @@ const POST_URL = 'https://raw.githubusercontent.com/imjhua/naver-blog-publisher/
 const ALARM_NAME = 'check-approved-post';
 async function checkLatest() {
   try {
-    const response = await fetch(POST_URL, {cache:'no-store'});
+    const response = await fetch(POST_URL+'?ts='+Date.now(), {cache:'no-store'});
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const post = await response.json();
     if (post.status !== 'approved' || typeof post.id !== 'string' ||
         typeof post.title !== 'string' || typeof post.content !== 'string') return;
     const signature = post.id + ':' + post.title + ':' + post.content;
-    await autoFillApprovedPost(post);
+    // Popup owns autofill and publishing; background polling only updates the badge.
     const state = await chrome.storage.local.get(['lastSeenSignature','lastAvailableSignature']);
     if (!state.lastAvailableSignature) {
       await chrome.storage.local.set({lastAvailableSignature:signature,lastSeenSignature:signature});
