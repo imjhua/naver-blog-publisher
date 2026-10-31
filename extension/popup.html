@@ -1,18 +1,14 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="UTF-8"><style>
-body{font:14px system-ui;width:330px;padding:14px;line-height:1.5}
-button{margin-top:10px;padding:9px;width:100%;cursor:pointer}
-input{width:100%} #status{white-space:pre-wrap} .hint{color:#555}
-</style></head><body>
-<strong>나의 마이솔 · 글쓰기 도우미</strong>
-<p>GitHub의 승인된 글을 바로 불러오거나 파일을 선택하세요. 제목과 본문을 각각 복사할 수 있습니다. 저장·발행은 하지 않습니다.</p>
-<button id="testBadge">NEW 알림 테스트</button>
-<button id="loadGithub">최신 승인 글 불러오기</button>
-<input id="file" type="file" accept=".json,application/json">
-<button id="autoFill">제목·본문 자동 입력 테스트 (저장·발행 안 함)</button>
-<button id="copyTitle">① 제목 복사</button>
-<button id="copyBody">② 일반 본문 복사</button>
-<button id="copyRichBody">③ 서식 포함 본문 복사 (시험)</button>
-<p class="hint">복사한 다음 네이버 글쓰기 화면의 해당 칸을 클릭하고 ⌘V로 붙여넣으세요. 서식 복사는 날짜 기울임꼴과 **강조**를 포함합니다. 링크 미리보기 카드는 네이버에서 별도 확인해야 합니다.</p>
-<p id="status" role="status"></p>
-<script src="popup.js"></script></body></html>
+<html lang="ko">
+<head><meta charset="UTF-8"><style>
+body{font:14px system-ui;width:320px;padding:16px;line-height:1.5}
+#status{white-space:pre-wrap;margin:12px 0 0}
+h1{font-size:15px;margin:0}
+small{display:block;color:#666;margin-top:8px}
+</style></head>
+<body>
+<h1>나의 마이솔 · 자동 입력</h1>
+<p id="status" role="status" aria-live="polite">승인 글을 불러오는 중...</p>
+<small>네이버 글쓰기 화면에서 실행하세요. 저장·발행은 하지 않습니다.</small>
+<script src="popup.js"></script>
+</body></html>
