@@ -542,3 +542,45 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse) => {
   })().catch(error => sendResponse({ok:false,error:error.message}));
   return true;
 });
+
+
+// Read-only publishing readiness inspection. Never clicks save/publish controls.
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== 'inspect-publish-readiness') return;
+  (async () => {
+    const tab = await chrome.tabs.get(message.tabId);
+    if (!tab?.url?.startsWith('https://blog.naver.com/')) throw new Error('네이버 블로그 탭이 아닙니다.');
+    const frames = await chrome.scripting.executeScript({
+      target:{tabId:tab.id,allFrames:true},
+      func:() => {
+        const visible = el => !!el.getClientRects().length &&
+          getComputedStyle(el).visibility !== 'hidden';
+        const title = document.querySelector('.se-title-text .se-text-paragraph');
+        const paragraphs = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+          .map(el=>(el.textContent||'').trim()).filter(Boolean);
+        const buttons = [...document.querySelectorAll('button,[role="button"]')]
+          .filter(visible).map(el=>({
+            label:(el.innerText||el.getAttribute('aria-label')||el.title||'').trim().slice(0,60),
+            tag:el.tagName.toLowerCase(),
+            className:String(el.className||'').slice(0,160)
+          })).filter(x=>/발행|등록|게시|공개|저장/.test(x.label)).slice(0,12);
+        const card = !!document.querySelector('.se-section-oglink, .se-module-oglink, .se-component.se-oglink, .se-component-oglink');
+        return {editor:!!title,title:(title?.textContent||'').trim().slice(0,100),
+          paragraphCount:paragraphs.length,hasDate:paragraphs.some(p=>/^\\d{4}년 \\d{1,2}월 \\d{1,2}일/.test(p)),
+          hasStoreUrl:paragraphs.some(p=>p.includes('smartstore.naver.com')),
+          hasProse:paragraphs.some(p=>p.length>60&&!p.includes('smartstore.naver.com')),
+          hasCard:card,buttons};
+      }
+    });
+    const editor = frames.find(f=>f.result?.editor)?.result;
+    const controls = frames.flatMap(f=>f.result?.buttons||[]);
+    sendResponse({ok:true,result:{
+      status:editor?'inspected':'editor-not-found',
+      title:editor?.title||'',paragraphCount:editor?.paragraphCount||0,
+      hasDate:!!editor?.hasDate,hasStoreUrl:!!editor?.hasStoreUrl,
+      hasProse:!!editor?.hasProse,hasCard:!!editor?.hasCard,
+      publishControls:controls,clicked:false,published:false
+    }});
+  })().catch(error=>sendResponse({ok:false,error:error.message}));
+  return true;
+});
