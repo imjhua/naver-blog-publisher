@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "My Mysore Blog Draft Helper",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "One-click loading and input of approved yoga posts from GitHub into Naver Blog.",
   "permissions": [
     "scripting",
@@ -20,5 +20,16 @@
   ],
   "background": {
     "service_worker": "background.js"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://blog.naver.com/my-mysore/*"
+      ],
+      "js": [
+        "publish-success.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
 }
