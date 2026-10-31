@@ -167,13 +167,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               const prose = content.split('\n').find(Boolean);
               const hasProse = paragraphs.some(p => p.includes(prose));
               const card = document.querySelector('.se-section-oglink, .se-module-oglink, .se-component.se-oglink, .se-component-oglink');
-              const urlParagraph = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
-                .find(p => (p.textContent || '').trim() === url);
-              if (!hasDate || !hasUrl || hasProse || !urlParagraph)
-                return {safe:false,hasDate,hasUrl,hasProse,card:!!card};
-              urlParagraph.scrollIntoView({block:'center'});
-              const rect = urlParagraph.getBoundingClientRect();
-              return {safe:true,x:rect.right-3,y:rect.top+rect.height/2,card:!!card};
+              if (!hasDate || !hasUrl || hasProse || !card) return {safe:false,hasDate,hasUrl,hasProse,card:!!card};
+              card.scrollIntoView({block:'center'});
+              const rect = card.getBoundingClientRect();
+              return {safe:true,x:rect.left+Math.min(rect.width/2,70),y:rect.bottom+14};
             },
             args:[body.split('\n')[0],post.storeUrl,post.content]
           });
@@ -219,21 +216,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
             return true;
           };
-          // Restore the previously working path: enable bold before inserting
-          // the date, then disable it before inserting the URL.
-          // Post-insertion selection is unreliable in SmartEditor.
           if (!resumeBody) preBold = await clickBold();
-          if (resumeBody) {
-            // Resume from the end of the existing URL, without duplicating it.
-            for (const [type,key,code,virtual] of [
-              ['rawKeyDown','End','End',35],['keyUp','End','End',35],
-              ['keyDown','Enter','Enter',13],['keyUp','Enter','Enter',13]
-            ]) {
-              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
-                type,key,code,windowsVirtualKeyCode:virtual,nativeVirtualKeyCode:virtual
-              });
-            }
-          }
           const lines = resumeBody ? post.content.split('\n') : value.split('\n');
           for (let i = 0; i < lines.length; i++) {
             if (i > 0) {
@@ -279,7 +262,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               Number.parseInt(getComputedStyle(el).fontWeight,10)>=600 ||
               /se-bold/.test(el.className));
           },
-          args:[body.split('\n')[0]]
+          args:[body.split('\\n')[0]]
         }))[0]?.result;
         if (alreadyBold) {
           result={status:'input-visible',formatting:'date-bold-confirmed'};
@@ -369,36 +352,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             // debugger's synthetic Cmd+B can leave selection intact without
             // applying the command. A real mouse click on the visible B button
             // uses the editor's own formatting handler.
-            // The floating toolbar can show B=active while SmartEditor's
-            // document remains weight 400. Use the editor's keyboard command
-            // against the real browser selection instead of clicking B.
-            // The shortcut is dispatched while the editor still owns focus.
-            const selectionBefore = (await chrome.scripting.executeScript({
+            const toolbar = (await chrome.scripting.executeScript({
               target,
-              world:'MAIN',
               func:() => {
-                const selections=[];
-                const visit=(win,depth)=>{
-                  if(depth>4)return;
-                  try {
-                    const s=win.getSelection();
-                    if(s?.toString()) selections.push(s.toString());
-                    for(const frame of win.document.querySelectorAll('iframe'))
-                      if(frame.contentWindow)visit(frame.contentWindow,depth+1);
-                  } catch(_){}
-                };
-                visit(window,0);
-                return selections;
+                const p = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+                  .find(el => el.classList.contains('se-is-text-paragraph-block-selected'));
+                const buttons = [...document.querySelectorAll('button,[role="button"]')];
+                const candidates = buttons.filter(el => {
+                  const label = [el.getAttribute('aria-label'),el.getAttribute('title'),
+                    el.className,el.textContent].filter(Boolean).join(' ').toLowerCase();
+                  return /bold|굵게|se-toolbar-button-bold|se-button-bold/.test(label);
+                }).filter(el => {
+                  const r = el.getBoundingClientRect();
+                  return r.width > 0 && r.height > 0;
+                });
+                const el = candidates.sort((a,b) => {
+                  const ra=a.getBoundingClientRect(),rb=b.getBoundingClientRect();
+                  return Math.abs(ra.top-(p?.getBoundingClientRect().top||0))-
+                    Math.abs(rb.top-(p?.getBoundingClientRect().top||0));
+                })[0];
+                if (!el) return {ok:false,candidateCount:0};
+                const r = el.getBoundingClientRect();
+                return {ok:true,x:r.left+r.width/2,y:r.top+r.height/2,
+                  label:el.getAttribute('aria-label')||el.getAttribute('title')||el.className};
               }
-            }))[0]?.result || [];
-            selectionText=selectionBefore.find(s=>s.trim()===date)||selectionBefore[0]||'';
-            // Never toggle bold if the selected text is not exactly the date:
-            // that would accidentally format a URL or a different paragraph.
-            if(selectionText.trim()===date){
+            }))[0]?.result;
+            if (toolbar?.ok) {
+              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+                type:'mousePressed',x:offset.x+toolbar.x,y:offset.y+toolbar.y,button:'left',clickCount:1
+              });
+              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+                type:'mouseReleased',x:offset.x+toolbar.x,y:offset.y+toolbar.y,button:'left',clickCount:1
+              });
+            } else {
               await key('b','KeyB',mac?4:2);
             }
-            const toolbar = {method:'native-shortcut',selectionMatched:selectionText.trim()===date,
-              selectedText:selectionText.slice(0,100)};
             const verified = (await chrome.scripting.executeScript({
               target,
               func:(date) => {
@@ -536,64 +524,5 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse) => {
     await chrome.action.setBadgeText({text:''});
     sendResponse({ok:true});
   })().catch(error => sendResponse({ok:false,error:error.message}));
-  return true;
-});
-
-
-// Read-only publishing readiness inspection. Never clicks save/publish controls.
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type !== 'inspect-publish-readiness') return;
-  (async () => {
-    const tab = await chrome.tabs.get(message.tabId);
-    if (!tab?.url?.startsWith('https://blog.naver.com/')) throw new Error('네이버 블로그 탭이 아닙니다.');
-    const frames = await chrome.scripting.executeScript({
-      target:{tabId:tab.id,allFrames:true},
-      func:() => {
-        const visible = el => !!el.getClientRects().length &&
-          getComputedStyle(el).visibility !== 'hidden';
-        const title = document.querySelector('.se-title-text .se-text-paragraph');
-        const paragraphs = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
-          .map(el=>(el.textContent||'').trim()).filter(Boolean);
-        const buttons = [...document.querySelectorAll('button,[role="button"]')]
-          .filter(visible).map(el=>({
-            label:(el.innerText||el.getAttribute('aria-label')||el.title||'').trim().slice(0,60),
-            tag:el.tagName.toLowerCase(),
-            className:String(el.className||'').slice(0,160)
-          })).filter(x=>/발행|등록|게시|공개|저장/.test(x.label)).slice(0,12);
-        const card = !!document.querySelector('.se-section-oglink, .se-module-oglink, .se-component.se-oglink, .se-component-oglink');
-        const dateParagraph = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
-          .find(p=>/^\\d{4}년 \\d{1,2}월 \\d{1,2}일/.test((p.textContent||'').trim()));
-        const dateText = (dateParagraph?.textContent||'').trim();
-        const dateBold = !!dateParagraph && !!dateText && (() => {
-          const walker = document.createTreeWalker(dateParagraph,NodeFilter.SHOW_TEXT);
-          let node,checked=0;
-          while((node=walker.nextNode()) && checked<dateText.length) {
-            const part=node.textContent||'';
-            if(!part.trim()) continue;
-            const parent=node.parentElement;
-            const weight=parent ? getComputedStyle(parent).fontWeight : '400';
-            const bold=!!parent?.closest('b,strong') || Number(weight)>=600 || weight==='bold';
-            if(!bold) return false;
-            checked+=part.length;
-          }
-          return checked>=dateText.length;
-        })();
-        return {editor:!!title,title:(title?.textContent||'').trim().slice(0,100),
-          paragraphCount:paragraphs.length,hasDate:paragraphs.some(p=>/^\\d{4}년 \\d{1,2}월 \\d{1,2}일/.test(p)),
-          hasStoreUrl:paragraphs.some(p=>p.includes('smartstore.naver.com')),
-          hasProse:paragraphs.some(p=>p.length>60&&!p.includes('smartstore.naver.com')),
-          hasCard:card,dateBold,buttons};
-      }
-    });
-    const editor = frames.find(f=>f.result?.editor)?.result;
-    const controls = frames.flatMap(f=>f.result?.buttons||[]);
-    sendResponse({ok:true,result:{
-      status:editor?'inspected':'editor-not-found',
-      title:editor?.title||'',paragraphCount:editor?.paragraphCount||0,
-      hasDate:!!editor?.hasDate,hasStoreUrl:!!editor?.hasStoreUrl,
-      hasProse:!!editor?.hasProse,hasCard:!!editor?.hasCard,dateBold:!!editor?.dateBold,
-      publishControls:controls,clicked:false,published:false
-    }});
-  })().catch(error=>sendResponse({ok:false,error:error.message}));
   return true;
 });
