@@ -30,7 +30,11 @@
           paragraphCount:ps.length,finalCount:final.length,settingsOpen:close.length>0,settings};
       }
     });
-    return frames.map(x=>x.result).find(x=>x?.title)||null;
+    const editors=frames.map(x=>x.result).filter(x=>x?.title);
+    // The editor can exist in more than one frame. Prefer the frame with
+    // the visible publish settings, not the first frame with a title.
+    return editors.find(x=>x.settingsOpen&&x.finalCount===1)||
+      editors.find(x=>x.settingsOpen)||editors[0]||null;
   };
   const openSettings=async(tabId)=>{
     const frames=await chrome.scripting.executeScript({
