@@ -262,8 +262,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           });
           dateBold = !!verified[0]?.result;
         }
-        result = {status:'input-visible',method:'debugger-Input.insertText',
-          formatting:dateBold ? 'date-bold-confirmed' : 'date-bold-unconfirmed'};
+        result = dateBold
+          ? {status:'input-visible',method:'debugger-Input.insertText',formatting:'date-bold-confirmed'}
+          : {status:'formatting-unconfirmed',diagnostics:{
+              dateSelected,reason:'SmartEditor did not confirm bold markup',
+              instruction:'본문 입력은 완료됐습니다. 날짜 굵게 서식만 확인이 필요합니다.'
+            }};
       }
     } finally {
       if (attached) await chrome.debugger.detach(debuggerTarget).catch(()=>{});
