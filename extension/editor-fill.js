@@ -1,5 +1,5 @@
 // Executed by chrome.scripting in each frame. Never saves or publishes.
-function fillApprovedPostInFrame(post) {
+async function fillApprovedPostInFrame(post) {
   const title = document.querySelector('.se-title-text .se-text-paragraph');
   const body = document.querySelector('.se-section-text .se-module-text .se-text-paragraph');
   if (!title || !body) return {status:'not-editor-frame'};
@@ -11,7 +11,7 @@ function fillApprovedPostInFrame(post) {
   const [year,month,day] = post.practiceDate.split('-').map(Number);
   const content = year + '년 ' + month + '월 ' + day + '일 · ' + post.practiceType +
     '\n' + post.storeUrl + '\n\n' + post.content;
-  function typeInto(el,value) {
+  async function typeInto(el,value) {
     // SmartEditor ONE uses a separate editable iframe for keyboard input.
     // Clicking the visible paragraph transfers focus to that iframe.
     el.click();
@@ -44,9 +44,14 @@ function fillApprovedPostInFrame(post) {
     selection.removeAllRanges();
     selection.addRange(range);
     const textResult = inputDoc.execCommand('insertText',false,value);
-    if (el.textContent?.includes(value)) return {ok:true,method:'iframe-insertText'};
-    // The editor may update its visible document asynchronously.
-    // Report command acceptance separately; do not claim text was confirmed.
+    // Wait for SmartEditor to reconcile its hidden input iframe with visible DOM.
+    // Do not retry the insertion: the text may already be in the input buffer.
+    for (let attempt = 0; attempt < 12; attempt++) {
+      if (el.textContent?.includes(value.split('\\n')[0])) {
+        return {ok:true,method:'iframe-insertText',confirmed:'visible'};
+      }
+      await new Promise(resolve => setTimeout(resolve,250));
+    }
     return {ok:false,diagnostics:{
       ...diagnostics,textResult,
       iframeText:inputTarget.textContent?.slice(0,80) || '',
@@ -56,10 +61,10 @@ function fillApprovedPostInFrame(post) {
     }};
   }
   // Input only. The SmartEditor may reject synthetic editing commands.
-  const titleResult = typeInto(title,post.title);
+  const titleResult = await typeInto(title,post.title);
   if (!titleResult.ok) return {status:'title-command-failed',diagnostics:titleResult.diagnostics};
   if (!title.textContent.includes(post.title)) return {status:'title-not-confirmed'};
-  const bodyResult = typeInto(body,content);
+  const bodyResult = await typeInto(body,content);
   if (!bodyResult.ok) return {status:'body-command-failed',diagnostics:bodyResult.diagnostics};
   const bodyText = document.querySelector('.se-section-text .se-module-text')?.textContent || '';
   return {status:bodyText.includes(post.content.slice(0,25)) ? 'input-visible' : 'body-not-confirmed',
