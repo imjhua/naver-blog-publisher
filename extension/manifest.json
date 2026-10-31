@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "My Mysore Blog Draft Helper",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Watch GitHub for approved yoga posts and prepare them for safe manual paste into Naver Blog.",
   "permissions": [
     "clipboardWrite",
     "alarms",
     "storage",
     "scripting",
-    "activeTab"
+    "activeTab",
+    "tabs"
   ],
   "action": {
     "default_popup": "popup.html"
