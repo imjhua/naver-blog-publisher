@@ -40,7 +40,7 @@ document.getElementById('copyBody').addEventListener('click', async () => {
 const escapeHtml = value => value.replace(/[&<>"']/g, character => ({
   '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
 })[character]);
-const boldHtml = value => value.split(/(\\*\\*[^*\\n]+\\*\\*)/g).map(segment =>
+const boldHtml = value => value.split(/(\*\*[^*\n]+\*\*)/g).map(segment =>
   segment.startsWith('**') && segment.endsWith('**')
     ? '<strong>' + escapeHtml(segment.slice(2,-2)) + '</strong>'
     : escapeHtml(segment)
@@ -48,13 +48,13 @@ const boldHtml = value => value.split(/(\\*\\*[^*\\n]+\\*\\*)/g).map(segment =>
 const makeRichBody = data => {
   const [year,month,day] = data.practiceDate.split('-').map(Number);
   const dateLine = `${year}년 ${month}월 ${day}일 · ${data.practiceType}`;
-  const paragraphs = data.content.split(/\\n\\s*\\n/).map(p =>
-    '<p>' + p.split('\\n').map(boldHtml).join('<br>') + '</p>'
+  const paragraphs = data.content.split(/\n\s*\n/).map(p =>
+    '<p>' + p.split('\n').map(boldHtml).join('<br>') + '</p>'
   ).join('');
   const html = '<html><body><p><em>' + escapeHtml(dateLine) +
     '</em></p><p><a href="' + escapeHtml(data.storeUrl) + '">' +
     escapeHtml(data.storeUrl) + '</a></p><p><br></p>' + paragraphs + '</body></html>';
-  const plain = dateLine + '\\n' + data.storeUrl + '\\n\\n' + data.content.replace(/\\*\\*([^*\\n]+)\\*\\*/g,'$1');
+  const plain = dateLine + '\n' + data.storeUrl + '\n\n' + data.content.replace(/\*\*([^*\n]+)\*\*/g,'$1');
   return {html,plain};
 };
 document.getElementById('copyRichBody').addEventListener('click', async () => {
