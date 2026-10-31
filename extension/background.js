@@ -240,9 +240,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                       .find(el => (el.textContent || '').trim() === date);
                     if (!p) return {present:false,bold:false};
                     const spans = [...p.querySelectorAll('span.__se-node')];
-                    const bold = spans.length > 0 && spans.every(el =>
-                      Number.parseInt(getComputedStyle(el).fontWeight,10) >= 600 ||
-                      /se-bold/.test(el.className) || !!el.closest('strong,b'));
+                    const boldForNode = el => {
+                      // SmartEditor can place its bold class on a wrapping span,
+                      // rather than on the __se-node itself.
+                      for (let node = el; node && node !== p.parentElement; node = node.parentElement) {
+                        if (node.nodeType !== 1) continue;
+                        if (node.matches('b,strong') || /(?:^|\\s)se-bold(?:\\s|$)/.test(node.className || ''))
+                          return true;
+                        const weight = getComputedStyle(node).fontWeight;
+                        if (Number.parseInt(weight,10) >= 600) return true;
+                      }
+                      return false;
+                    };
+                    const bold = spans.length > 0 && spans.every(boldForNode);
                     return {present:true,bold};
                   },
                   args:[lines[0]]
@@ -286,9 +296,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               .find(el=>(el.textContent||'').trim()===date);
             if (!p) return false;
             const spans=[...p.querySelectorAll('span.__se-node')];
-            return spans.length>0 && spans.every(el=>
-              Number.parseInt(getComputedStyle(el).fontWeight,10)>=600 ||
-              /se-bold/.test(el.className));
+            return spans.length>0 && spans.every(el=>{
+              for(let node=el;node && node!==p.parentElement;node=node.parentElement){
+                if(node.nodeType!==1)continue;
+                if(node.matches('b,strong') || /(?:^|\\s)se-bold(?:\\s|$)/.test(node.className||'') ||
+                   Number.parseInt(getComputedStyle(node).fontWeight,10)>=600)return true;
+              }
+              return false;
+            });
           },
           args:[body.split('\\n')[0]]
         }))[0]?.result;
