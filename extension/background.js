@@ -8,8 +8,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const post = message.post;
     if (!post || post.status !== 'approved' || typeof post.title !== 'string' ||
         typeof post.content !== 'string') throw new Error('승인 글 데이터가 올바르지 않습니다.');
-    const [tab] = await chrome.tabs.query({active:true,lastFocusedWindow:true});
-    if (!tab?.id) throw new Error('활성 탭을 찾지 못했습니다.');
+    const tab = message.tabId
+      ? await chrome.tabs.get(message.tabId)
+      : (await chrome.tabs.query({active:true,lastFocusedWindow:true}))[0];
+    if (!tab?.id || !tab.url?.startsWith('https://blog.naver.com/'))
+      throw new Error('네이버 블로그 탭을 찾지 못했습니다.');
     if (activeFillTabs.has(tab.id)) {
       sendResponse({ok:true,result:{status:'already-running'}});
       return;
@@ -409,6 +412,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   })().catch(error => sendResponse({ok:false,error:error.message}));
   return true;
 });
+// Background automation runs only when an already-open Naver editor exists.
+// A local per-post lock prevents repeated injection during alarm polling.
+// Publishing remains manual until the publish flow is separately verified.
+async function autoFillApprovedPost(post) {
+  const signature = [post.id,post.title,post.content].join(':');
+  const state = await chrome.storage.local.get(['autoFillDone','autoFillAttempted']);
+  if (state.autoFillDone === signature || state.autoFillAttempted === signature) return;
+  const tabs = await chrome.tabs.query({url:'https://blog.naver.com/*'});
+  const editors = [];
+  for (const tab of tabs) {
+    try {
+      const frames = await chrome.scripting.executeScript({
+        target:{tabId:tab.id,allFrames:true},
+        func:() => !!document.querySelector('.se-title-text .se-text-paragraph') &&
+          !!document.querySelector('.se-section-text .se-module-text .se-text-paragraph')
+      });
+      if (frames.some(f=>f.result)) editors.push(tab);
+    } catch (_) { /* inaccessible or not ready */ }
+  }
+  if (editors.length !== 1) return;
+  // Lock before execution; never automatically retry after an uncertain partial fill.
+  await chrome.storage.local.set({autoFillAttempted:signature});
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type:'fill-approved-post',post,tabId:editors[0].id
+    });
+    if (response?.ok && response.result?.status === 'input-visible') {
+      await chrome.storage.local.set({autoFillDone:signature});
+      await chrome.action.setBadgeText({text:'OK'});
+      await chrome.action.setBadgeBackgroundColor({color:'#246b46'});
+    } else {
+      console.warn('Automatic fill needs review',response);
+      await chrome.action.setBadgeText({text:'!'});
+      await chrome.action.setBadgeBackgroundColor({color:'#a04a2c'});
+    }
+  } catch(error) {
+    console.warn('Automatic fill failed; manual review required',error);
+    await chrome.action.setBadgeText({text:'!'});
+  }
+}
 const POST_URL = 'https://raw.githubusercontent.com/imjhua/naver-blog-publisher/main/posts/latest.json';
 const ALARM_NAME = 'check-approved-post';
 async function checkLatest() {
@@ -419,6 +462,7 @@ async function checkLatest() {
     if (post.status !== 'approved' || typeof post.id !== 'string' ||
         typeof post.title !== 'string' || typeof post.content !== 'string') return;
     const signature = post.id + ':' + post.title + ':' + post.content;
+    await autoFillApprovedPost(post);
     const state = await chrome.storage.local.get(['lastSeenSignature','lastAvailableSignature']);
     if (!state.lastAvailableSignature) {
       await chrome.storage.local.set({lastAvailableSignature:signature,lastSeenSignature:signature});
