@@ -14,12 +14,15 @@ document.getElementById('fill').addEventListener('click', async () => {
     if (!tab?.id || !tab.url?.startsWith('https://blog.naver.com/')) throw Error('네이버 블로그 글쓰기 탭에서 실행해 주세요.');
     const result = await chrome.scripting.executeScript({target:{tabId:tab.id,allFrames:true},func: () => {
       if (location.hostname !== 'blog.naver.com') return {skip:true};
-      const visible = (selectors) => [...new Set(selectors.flatMap(s => [...document.querySelectorAll(s)]))].filter(e => e.getClientRects().length);
-      const title = visible(['.se-title-text [contenteditable="true"]','.se-title-text .se-text-paragraph']);
-      const body = visible(['.se-main-container .se-component.se-text [contenteditable="true"]','.se-main-container .se-component.se-text .se-text-paragraph']);
-      return {titleCount:title.length,bodyCount:body.length,frame:location.href};
+      const visible = e => !!e.getClientRects().length;
+      const sample = (e) => ({tag:e.tagName.toLowerCase(),cls:String(e.className || '').slice(0,100),role:e.getAttribute('role'),editable:e.getAttribute('contenteditable'),placeholder:e.getAttribute('placeholder') || e.getAttribute('data-placeholder'),outer:e.outerHTML.slice(0,260)});
+      const candidates = [...document.querySelectorAll('[contenteditable], [role="textbox"], textarea, input, .se-title-text, .se-main-container, .se-text-paragraph')].filter(visible);
+      const title = [...document.querySelectorAll('.se-title-text [contenteditable="true"], .se-title-text .se-text-paragraph')].filter(visible);
+      const body = [...document.querySelectorAll('.se-main-container .se-component.se-text [contenteditable="true"], .se-main-container .se-component.se-text .se-text-paragraph')].filter(visible);
+      return {titleCount:title.length,bodyCount:body.length,framePath:location.pathname,documentReady:document.readyState,visibleCandidates:candidates.length,samples:candidates.slice(0,12).map(sample)};
     }});
     const details = result.map(x=>x.result).filter(x=>x&&!x.skip);
-    status.textContent = '에디터 탐지 결과 (입력 전 안전 점검): '+JSON.stringify(details);
+    status.textContent = '에디터 구조 진단 (입력·저장·발행 없음): '+JSON.stringify(details,null,2);
+
   } catch (e) {status.textContent = '오류: '+e.message;}
 });
