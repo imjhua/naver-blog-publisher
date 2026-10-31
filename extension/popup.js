@@ -3,7 +3,7 @@ const status = document.getElementById('status');
   try {
     status.textContent = 'GitHub에서 최신 승인 글을 불러오는 중...';
     const response = await fetch(
-      'https://raw.githubusercontent.com/imjhua/naver-blog-publisher/main/posts/latest.json',
+      'https://raw.githubusercontent.com/imjhua/naver-blog-publisher/main/posts/latest.json?ts='+Date.now(),
       {cache:'no-store'}
     );
     if (!response.ok) throw new Error('GitHub 요청 실패 (HTTP '+response.status+')');
@@ -17,14 +17,14 @@ const status = document.getElementById('status');
       throw new Error('승인된 글 형식이 올바르지 않습니다.');
     }
     const {lastPublished}=await chrome.storage.local.get('lastPublished');
-    if(lastPublished?.title===post.title){
+    if(lastPublished?.id===post.id || (lastPublished?.title===post.title && lastPublished?.title && lastPublished?.title===post.title)){
       status.textContent='이 브라우저에서 발행 완료를 확인한 글입니다. 재입력을 차단했습니다.\\n게시 URL: '+lastPublished.blogUrl;
       return;
     }
     // GitHub is the durable publication ledger. A published marker blocks
     // another autofill even when the editor itself is empty.
     const publishedResponse=await fetch(
-      'https://raw.githubusercontent.com/imjhua/naver-blog-publisher/main/posts/published/'+encodeURIComponent(post.id)+'.json',
+      'https://raw.githubusercontent.com/imjhua/naver-blog-publisher/main/posts/published/'+encodeURIComponent(post.id)+'.json?ts='+Date.now(),
       {cache:'no-store'}
     );
     if(publishedResponse.ok){
@@ -40,7 +40,7 @@ const status = document.getElementById('status');
     if (!tab?.id || !tab.url?.startsWith('https://blog.naver.com/')) {
       throw new Error('네이버 블로그 글쓰기 탭에서 실행하세요.');
     }
-    status.textContent = '제목과 본문을 자동 입력하는 중...';
+    status.textContent = '새 글 확인 ('+post.id+'): '+post.title+'\n제목과 본문을 자동 입력하는 중...';
     const result = await chrome.runtime.sendMessage({type:'fill-approved-post',post});
     if (!result?.ok) throw new Error(result?.error || '입력 요청 실패');
     if (result.result?.status === 'already-running') {
