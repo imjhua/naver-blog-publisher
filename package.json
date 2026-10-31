@@ -1,0 +1,18 @@
+{
+  "name": "naver-blog-publisher",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "tsx src/validate.ts",
+    "publish": "tsx src/publish.ts"
+  },
+  "dependencies": {
+    "playwright": "^1.58.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "@types/node": "^24.0.0"
+  }
+}
