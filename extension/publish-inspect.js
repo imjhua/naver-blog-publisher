@@ -16,11 +16,32 @@
           const title=document.querySelector('.se-title-text .se-text-paragraph');
           const paragraphs=[...document.querySelectorAll('.se-section-text .se-text-paragraph')];
           const date=paragraphs.find(p=>/^\d{4}년\s+\d{1,2}월\s+\d{1,2}일/.test((p.textContent||'').trim()));
-          const dateNodes=date ? [...date.querySelectorAll('span.__se-node')] : [];
-          const bold=!!dateNodes.length && dateNodes.every(el=>{
-            const weight=getComputedStyle(el).fontWeight;
-            return Number.parseInt(weight,10)>=600 || !!el.closest('b,strong');
-          });
+          // Match the verified autofill check: SmartEditor splits the date
+          // across text nodes and places <b> inside __se-node spans.
+          const isDateBold=p=>{
+            if(!p)return false;
+            const walker=document.createTreeWalker(p,NodeFilter.SHOW_TEXT);
+            const parts=[];
+            while(walker.nextNode()){
+              const node=walker.currentNode;
+              if(!node.textContent.trim())continue;
+              let el=node.parentElement;
+              let bold=false;
+              while(el && el!==p.parentElement){
+                if(el.matches('b,strong') ||
+                   /(?:^|\\s)(?:se-bold|se-text-format-bold)(?:\\s|$)/.test(el.className||'') ||
+                   Number.parseInt(getComputedStyle(el).fontWeight,10)>=600){
+                  bold=true;break;
+                }
+                el=el.parentElement;
+              }
+              parts.push({text:node.textContent,bold});
+            }
+            return parts.length>0 &&
+              parts.map(x=>x.text).join('').trim()===(p.textContent||'').trim() &&
+              parts.every(x=>x.bold);
+          };
+          const bold=isDateBold(date);
           const buttons=[...document.querySelectorAll('button,[role="button"]')].filter(visible)
             .map(el=>({label:(el.innerText||el.getAttribute('aria-label')||el.title||'').trim().slice(0,50),
               tag:el.tagName,disabled:!!el.disabled}))
