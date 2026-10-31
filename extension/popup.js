@@ -49,10 +49,12 @@ document.getElementById('inspectPublish').addEventListener('click',async()=>{
     output.textContent=[
       '제목: '+(r.title||'없음'),
       '날짜: '+(r.hasDate?'확인':'미확인'),
+      '날짜 볼드: '+(r.dateBold?'확인':'미확인'),
       '스토어 URL: '+(r.hasStoreUrl?'확인':'미확인'),
       '미리보기 카드: '+(r.hasCard?'확인':'미확인'),
       '본문: '+(r.hasProse?'확인':'미확인'),
       '발행 관련 버튼: '+(r.publishControls.map(x=>x.label).join(', ')||'감지되지 않음'),
+      '발행 준비: '+(r.title && r.hasDate && r.dateBold && r.hasStoreUrl && r.hasCard && r.hasProse ? '검증 통과' : '확인 필요'),
       '실제 발행: 실행하지 않음'
     ].join('\\n');
   } catch(error) {output.textContent='확인 실패: '+error.message;}
