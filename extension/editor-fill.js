@@ -59,6 +59,11 @@ async function fillApprovedPostInFrame(post) {
     for (const eventName of ['beforeinput','input','compositionstart','compositionend']) {
       inputDoc.removeEventListener(eventName,observe,true);
     }
+    // SmartEditor may commit its temporary iframe input on blur/focus transfer.
+    // Do not type again; only ask the editor to finish the existing composition.
+    inputTarget.blur();
+    inputFrame.blur();
+    el.dispatchEvent(new FocusEvent('focusout',{bubbles:true}));
     // Wait for SmartEditor to reconcile its hidden input iframe with visible DOM.
     // Do not retry the insertion: the text may already be in the input buffer.
     for (let attempt = 0; attempt < 12; attempt++) {
@@ -68,7 +73,7 @@ async function fillApprovedPostInFrame(post) {
       await new Promise(resolve => setTimeout(resolve,250));
     }
     return {ok:false,diagnostics:{
-      ...diagnostics,textResult,events,
+      ...diagnostics,textResult,events,blurAttempted:true,
       iframeText:inputTarget.textContent?.slice(0,80) || '',
       visibleText:el.textContent?.slice(0,80) || '',
       selectionCount:selection.rangeCount,
