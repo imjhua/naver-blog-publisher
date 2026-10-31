@@ -11,7 +11,7 @@ const status = document.getElementById('status');
     const file = await response.json();
     if (file.encoding !== 'base64' || typeof file.content !== 'string')
       throw new Error('GitHub 게시물 데이터 형식 오류');
-    const bytes = Uint8Array.from(atob(file.content.replace(/\\s/g,'')),c=>c.charCodeAt(0));
+    const bytes = Uint8Array.from(atob(file.content.replace(/\s/g,'')),c=>c.charCodeAt(0));
     const post = JSON.parse(new TextDecoder().decode(bytes));
     status.textContent = 'GitHub 승인 글 확인: '+post.id+' / '+post.title;
     if (post.status !== 'approved' ||
