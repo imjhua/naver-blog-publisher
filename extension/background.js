@@ -216,7 +216,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
             return true;
           };
-          if (!resumeBody) preBold = await clickBold();
+          if (!resumeBody) {
+            preBold = await clickBold();
+            // The bold toolbar can take focus away from the empty editor.
+            // Restore the original body caret before inserting the date.
+            await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+              type:'mousePressed',x,y,button:'left',clickCount:1
+            });
+            await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+              type:'mouseReleased',x,y,button:'left',clickCount:1
+            });
+            const bodyFocused=(await chrome.scripting.executeScript({
+              target,world:'MAIN',
+              func:()=>{
+                const sel=window.getSelection();
+                const node=sel?.anchorNode;
+                const el=node?.nodeType===Node.ELEMENT_NODE?node:node?.parentElement;
+                const p=el?.closest('.se-section-text .se-text-paragraph');
+                return !!p && !(p.textContent||'').trim();
+              }
+            }))[0]?.result;
+            if(!bodyFocused){
+              result={status:'date-caret-not-ready',diagnostics:{stage:'before-date-insertion'}};
+              break;
+            }
+          }
           const lines = resumeBody ? post.content.split('\n') : value.split('\n');
           let nextParagraphPrepared = false;
           for (let i = 0; i < lines.length; i++) {
@@ -235,7 +259,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             // Never retry insertion into a partially populated SmartEditor document.
             if (!resumeBody && i === 0) {
               let dateCheck = {present:false,bold:false};
-              for (let attempt = 0; attempt < 8; attempt++) {
+              for (let attempt = 0; attempt < 20; attempt++) {
                 dateCheck = (await chrome.scripting.executeScript({
                   target,
                   func:(date) => {
