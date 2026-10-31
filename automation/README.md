@@ -1,18 +1,24 @@
-# Mobile publishing workflow (safe scaffold)
+# Mobile publishing via GitHub Actions
 
-From mobile GitHub, open **Actions → Mobile-approved Naver publishing → Run workflow**.
-The default is a **dry run**. It validates `posts/latest.json` and refuses to
-run when `posts/published/<id>.json` exists.
+The workflow is manually dispatched from GitHub Actions on mobile or desktop.
+It defaults to a **dry run**. This validates the approved post and checks
+`posts/published/<id>.json` for a duplicate.
 
-Actual publishing is **not yet enabled**: `automation/publish.mjs` intentionally
-stops before editing or submitting anything. This prevents accidentally
-publishing incomplete or duplicate posts while the Naver SmartEditor headless
-flow remains untested.
+Live mode uses Playwright Chromium with a Naver authenticated browser
+storage-state secret named `NAVER_STORAGE_STATE`. The runner types into
+SmartEditor, checks the date bold style, paragraphs, store URL and OG card,
+opens the publish panel, submits once, and records the public URL only after
+the published page title is verified.
 
-Before enabling live publishing, validate Playwright input and OG-card
-rendering in a test blog, handle Naver session expiry and login challenges,
-verify the final public URL, and only then commit a receipt. Never store Naver
-passwords, cookies, or storage-state files in the repository. If using a
-storage-state secret, store it only in GitHub Actions Secrets.
+**Important: The live flow has not been tested against a real Naver editor
+session in GitHub Actions.** Login challenges, Naver editor changes and the
+OG card may block it. Do not enable live mode before testing with a disposable
+test post. If a submission times out, do not retry until you have manually
+checked whether it was published.
 
-The existing Chrome extension remains the working publishing fallback.
+To use: open GitHub > Actions > Mobile-approved Naver publishing > Run workflow.
+Leave `publish=false` for validation; `publish=true` attempts a real post
+and requires the secret. Store cookies only in encrypted Actions secrets,
+never in the repository, logs, screenshots or chat.
+
+The existing Chrome extension remains the proven publishing fallback.
