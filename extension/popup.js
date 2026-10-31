@@ -16,11 +16,12 @@ document.getElementById('fill').addEventListener('click', async () => {
       if (location.hostname !== 'blog.naver.com') return {skip:true};
       const visible = e => !!e.getClientRects().length;
       const sample = (e) => ({tag:e.tagName.toLowerCase(),cls:String(e.className || '').slice(0,100),role:e.getAttribute('role'),editable:e.getAttribute('contenteditable'),placeholder:e.getAttribute('placeholder') || e.getAttribute('data-placeholder'),outer:e.outerHTML.slice(0,260)});
-      const candidates = [...document.querySelectorAll('[contenteditable], [role="textbox"], textarea, input, .se-title-text, .se-main-container, .se-text-paragraph')].filter(visible);
+      const candidates = [...document.querySelectorAll('[contenteditable], [role="textbox"], textarea, input, .se-title-text, .se-main-container, .se-text-paragraph, .se-component-content, .se-module-text, .se-placeholder')].filter(visible);
       const title = [...document.querySelectorAll('.se-title-text [contenteditable="true"], .se-title-text .se-text-paragraph')].filter(visible);
       const body = [...document.querySelectorAll('.se-main-container .se-component.se-text [contenteditable="true"], .se-main-container .se-component.se-text .se-text-paragraph')].filter(visible);
-      return {titleCount:title.length,bodyCount:body.length,framePath:location.pathname,documentReady:document.readyState,visibleCandidates:candidates.length,samples:candidates.slice(0,12).map(sample)};
+      return {titleCount:title.length,bodyCount:body.length,framePath:location.pathname,documentReady:document.readyState,visibleCandidates:candidates.length,editorHints:{titleModules:document.querySelectorAll('.se-title-text').length,textModules:document.querySelectorAll('.se-module-text').length,bodyComponents:document.querySelectorAll('.se-component.se-text').length,bodyParagraphs:document.querySelectorAll('.se-component.se-text .se-text-paragraph').length,frames:document.querySelectorAll('iframe').length},samples:candidates.slice(0,18).map(sample)};
     }});
+    // SmartEditor ONE uses nested editor frames; collect DOM hints only, never write.
     const details = result.map(x=>x.result).filter(x=>x&&!x.skip);
     status.textContent = '에디터 구조 진단 (입력·저장·발행 없음): '+JSON.stringify(details,null,2);
 
