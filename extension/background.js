@@ -218,10 +218,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       }
       if (!result) {
-        // Select the date using real browser mouse drag inside SmartEditor.
-        // DOM Range selection alone does not activate the editor's formatting state.
+        // Select the first paragraph with keyboard navigation after clicking
+        // its text. Drag selection across SmartEditor iframe is unreliable.
         const date = body.split('\n')[0];
-        const dateRect = await chrome.scripting.executeScript({
+        const info = (await chrome.scripting.executeScript({
           target,
           func:(date) => {
             const matches = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
@@ -229,28 +229,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (matches.length !== 1) return {ok:false,reason:'date-not-unique',count:matches.length};
             const p = matches[0];
             p.scrollIntoView({block:'center'});
-            const range = document.createRange();
-            range.selectNodeContents(p);
-            // SmartEditor may return several rectangles for one visual line
-            // because its text is split across nested inline spans.
-            const rects = [...range.getClientRects()].filter(r => r.width > 0 && r.height > 0);
-            if (!rects.length) return {ok:false,reason:'date-no-rects'};
-            const sorted = rects.slice().sort((a,b) => a.left-b.left);
-            const top = Math.min(...rects.map(r => r.top));
-            const bottom = Math.max(...rects.map(r => r.bottom));
-            const sameLine = rects.every(r => Math.abs((r.top+r.bottom)/2-(top+bottom)/2) < Math.max(5,r.height/2));
-            if (!sameLine) return {ok:false,reason:'date-wraps',rectCount:rects.length};
-            const left = Math.min(...rects.map(r => r.left));
-            const right = Math.max(...rects.map(r => r.right));
-            return {ok:right-left>8,x1:left+1,x2:right-1,y:(top+bottom)/2,rectCount:rects.length};
+            const r = p.getBoundingClientRect();
+            return {ok:true,x:r.left+Math.min(r.width/2,40),y:r.top+r.height/2};
           },
           args:[date]
-        });
-        const rect = dateRect[0]?.result;
+        }))[0]?.result;
         let dateBold = false;
         let selectionText = '';
-        if (rect?.ok && rect.x2 > rect.x1) {
-          const frameOffset = (await chrome.scripting.executeScript({
+        let selectionMethod = 'keyboard-home-shift-end';
+        if (info?.ok) {
+          const offset = (await chrome.scripting.executeScript({
             target:{tabId:tab.id},
             func:() => {
               const iframe = document.querySelector('iframe#mainFrame') ||
@@ -260,33 +248,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               return {x:r.left,y:r.top};
             }
           }))[0]?.result;
-          if (frameOffset) {
-            const x1=frameOffset.x+rect.x1,x2=frameOffset.x+rect.x2,y=frameOffset.y+rect.y;
+          if (offset) {
+            const x=offset.x+info.x,y=offset.y+info.y;
             await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
-              type:'mousePressed',x:x1,y,button:'left',clickCount:1
+              type:'mousePressed',x,y,button:'left',clickCount:1
             });
             await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
-              type:'mouseMoved',x:x2,y,button:'left',buttons:1
+              type:'mouseReleased',x,y,button:'left',clickCount:1
             });
-            await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
-              type:'mouseReleased',x:x2,y,button:'left',clickCount:1
-            });
-            const selection = (await chrome.scripting.executeScript({
+            const key = async (name,code,modifiers=0) => {
+              const virtual = name==='Home'?36:name==='End'?35:66;
+              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
+                type:'rawKeyDown',key:name,code,modifiers,windowsVirtualKeyCode:virtual
+              });
+              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
+                type:'keyUp',key:name,code,modifiers,windowsVirtualKeyCode:virtual
+              });
+            };
+            await key('Home','Home');
+            await key('End','End',8);
+            selectionText = (await chrome.scripting.executeScript({
               target,func:() => window.getSelection()?.toString() || ''
             }))[0]?.result || '';
-            selectionText = selection;
-            if (selection.trim() === date) {
+            if (selectionText.trim() === date) {
               const mac = (await chrome.scripting.executeScript({
                 target,func:() => /Mac/i.test(navigator.platform)
               }))[0]?.result;
-              const modifiers = mac ? 4 : 2;
-              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
-                type:'keyDown',key:'b',code:'KeyB',modifiers,windowsVirtualKeyCode:66
-              });
-              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
-                type:'keyUp',key:'b',code:'KeyB',modifiers,windowsVirtualKeyCode:66
-              });
-              const verified = await chrome.scripting.executeScript({
+              await key('b','KeyB',mac?4:2);
+              const verified = (await chrome.scripting.executeScript({
                 target,
                 func:(date) => {
                   const p = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
@@ -295,16 +284,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     .some(el => (el.textContent || '').trim() === date);
                 },
                 args:[date]
-              });
-              dateBold = !!verified[0]?.result;
+              }))[0]?.result;
+              dateBold = !!verified;
             }
           }
         }
         result = dateBold
           ? {status:'input-visible',method:'debugger-Input.insertText',formatting:'date-bold-confirmed'}
           : {status:'formatting-unconfirmed',diagnostics:{
-              rect,selectedText:selectionText.slice(0,100),
-              reason:'Date bold was not confirmed after real mouse selection'
+              info,selectedText:selectionText.slice(0,100),selectionMethod,
+              reason:'Date bold was not confirmed'
             }};
       }
     } finally {
