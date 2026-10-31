@@ -49,9 +49,12 @@ document.getElementById('loadGithub').addEventListener('click', async () => {
 document.getElementById('autoFill').addEventListener('click', async () => {
   try {
     ensurePost();
-    const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
-    if (!tab?.id || !tab.url?.startsWith('https://blog.naver.com/')) {
-      throw new Error('네이버 블로그 글쓰기 탭에서만 실행할 수 있습니다.');
+    const tabs = await chrome.tabs.query({active:true,lastFocusedWindow:true});
+    const tab = tabs[0];
+    if (!tab?.id) throw new Error('현재 Chrome 탭을 찾지 못했습니다.');
+    const currentUrl = tab.url || tab.pendingUrl || '';
+    if (!/^https:\/\/blog\.naver\.com\//.test(currentUrl)) {
+      throw new Error('네이버 글쓰기 탭을 찾지 못했습니다. 감지된 주소: ' + (currentUrl || '(주소 읽기 불가)'));
     }
     status.textContent = '빈 에디터인지 확인하고 입력하는 중...';
     await chrome.scripting.executeScript({
