@@ -278,7 +278,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               Number.parseInt(getComputedStyle(el).fontWeight,10)>=600 ||
               /se-bold/.test(el.className));
           },
-          args:[body.split('\\n')[0]]
+          args:[body.split('\n')[0]]
         }))[0]?.result;
         if (alreadyBold) {
           result={status:'input-visible',formatting:'date-bold-confirmed'};
