@@ -99,13 +99,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const body = document.querySelector('.se-section-text');
             const link = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
               .find(p => (p.textContent || '').trim() === url);
-            const cards = [...document.querySelectorAll('.se-section-oglink, .se-module-oglink, .se-component.se-oglink')];
+            const cards = [...document.querySelectorAll('.se-section-oglink, .se-module-oglink, .se-component.se-oglink, .se-component-oglink')];
             const card = cards.find(el => (el.textContent || '').includes('smartstore.naver.com')) || cards[0];
             if (!link || !card) return {ready:false,link:!!link,card:!!card};
             const position = link.compareDocumentPosition(card);
             const afterLink = !!(position & Node.DOCUMENT_POSITION_FOLLOWING);
             const paragraphs = [...document.querySelectorAll('.se-section-text .se-text-paragraph')];
-            const firstProse = paragraphs.find(p => (p.textContent || '').trim().startsWith('오랜만에 마이솔'));
+            const firstProse = paragraphs.find(p => {
+              const value = (p.textContent || '').trim();
+              return value && value !== url && !/^\\d{4}년 /.test(value);
+            });
             const beforeProse = !firstProse || !!(card.compareDocumentPosition(firstProse) & Node.DOCUMENT_POSITION_FOLLOWING);
             return {ready:afterLink && beforeProse,afterLink,beforeProse,cardCount:cards.length};
           },
