@@ -218,55 +218,85 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       }
       if (!result) {
-        // Format only after all paragraphs have been inserted successfully.
-        // Selecting the text is safe; a keyboard shortcut is only attempted
-        // when the date paragraph is uniquely identified.
-        const selected = await chrome.scripting.executeScript({
+        // Select the date using real browser mouse drag inside SmartEditor.
+        // DOM Range selection alone does not activate the editor's formatting state.
+        const date = body.split('\n')[0];
+        const dateRect = await chrome.scripting.executeScript({
           target,
           func:(date) => {
             const matches = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
               .filter(p => (p.textContent || '').trim() === date);
-            if (matches.length !== 1) return {ok:false,reason:'date-paragraph-not-unique',count:matches.length};
-            const paragraph = matches[0];
+            if (matches.length !== 1) return {ok:false,reason:'date-not-unique',count:matches.length};
+            const p = matches[0];
+            p.scrollIntoView({block:'center'});
             const range = document.createRange();
-            range.selectNodeContents(paragraph);
-            const selection = window.getSelection();
-            selection.removeAllRanges();
-            selection.addRange(range);
-            return {ok:selection.toString().trim() === date};
+            range.selectNodeContents(p);
+            const rects = [...range.getClientRects()].filter(r => r.width > 0 && r.height > 0);
+            if (rects.length !== 1) return {ok:false,reason:'date-multiline',rectCount:rects.length};
+            const r = rects[0];
+            return {ok:true,x1:r.left+2,x2:r.right-2,y:r.top+r.height/2};
           },
-          args:[body.split('\n')[0]]
+          args:[date]
         });
-        const dateSelected = !!selected[0]?.result?.ok;
+        const rect = dateRect[0]?.result;
         let dateBold = false;
-        if (dateSelected) {
-          const mac = (await chrome.scripting.executeScript({
-            target,func:() => /Mac/i.test(navigator.platform)
+        let selectionText = '';
+        if (rect?.ok && rect.x2 > rect.x1) {
+          const frameOffset = (await chrome.scripting.executeScript({
+            target:{tabId:tab.id},
+            func:() => {
+              const iframe = document.querySelector('iframe#mainFrame') ||
+                [...document.querySelectorAll('iframe')].find(f => (f.src || '').includes('PostWriteForm.naver'));
+              if (!iframe) return null;
+              const r = iframe.getBoundingClientRect();
+              return {x:r.left,y:r.top};
+            }
           }))[0]?.result;
-          const modifiers = mac ? 4 : 2;
-          await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
-            type:'keyDown',key:'b',code:'KeyB',modifiers,windowsVirtualKeyCode:66
-          });
-          await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
-            type:'keyUp',key:'b',code:'KeyB',modifiers,windowsVirtualKeyCode:66
-          });
-          const verified = await chrome.scripting.executeScript({
-            target,
-            func:(date) => {
-              const paragraph = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
-                .find(p => (p.textContent || '').trim() === date);
-              return !!paragraph && [...paragraph.querySelectorAll('b,strong,.se-bold')]
-                .some(el => (el.textContent || '').trim() === date);
-            },
-            args:[body.split('\n')[0]]
-          });
-          dateBold = !!verified[0]?.result;
+          if (frameOffset) {
+            const x1=frameOffset.x+rect.x1,x2=frameOffset.x+rect.x2,y=frameOffset.y+rect.y;
+            await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+              type:'mousePressed',x:x1,y,button:'left',clickCount:1
+            });
+            await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+              type:'mouseMoved',x:x2,y,button:'left',buttons:1
+            });
+            await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+              type:'mouseReleased',x:x2,y,button:'left',clickCount:1
+            });
+            const selection = (await chrome.scripting.executeScript({
+              target,func:() => window.getSelection()?.toString() || ''
+            }))[0]?.result || '';
+            selectionText = selection;
+            if (selection.trim() === date) {
+              const mac = (await chrome.scripting.executeScript({
+                target,func:() => /Mac/i.test(navigator.platform)
+              }))[0]?.result;
+              const modifiers = mac ? 4 : 2;
+              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
+                type:'keyDown',key:'b',code:'KeyB',modifiers,windowsVirtualKeyCode:66
+              });
+              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
+                type:'keyUp',key:'b',code:'KeyB',modifiers,windowsVirtualKeyCode:66
+              });
+              const verified = await chrome.scripting.executeScript({
+                target,
+                func:(date) => {
+                  const p = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+                    .find(el => (el.textContent || '').trim() === date);
+                  return !!p && [...p.querySelectorAll('b,strong,.se-bold,[style*="font-weight"]')]
+                    .some(el => (el.textContent || '').trim() === date);
+                },
+                args:[date]
+              });
+              dateBold = !!verified[0]?.result;
+            }
+          }
         }
         result = dateBold
           ? {status:'input-visible',method:'debugger-Input.insertText',formatting:'date-bold-confirmed'}
           : {status:'formatting-unconfirmed',diagnostics:{
-              dateSelected,reason:'SmartEditor did not confirm bold markup',
-              instruction:'본문 입력은 완료됐습니다. 날짜 굵게 서식만 확인이 필요합니다.'
+              rect,selectedText:selectionText.slice(0,100),
+              reason:'Date bold was not confirmed after real mouse selection'
             }};
       }
     } finally {
