@@ -235,6 +235,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           args:[date]
         }))[0]?.result;
         let dateBold = false;
+        let formattingDiagnostics = null;
         let selectionText = '';
         let selectionMethod = 'keyboard-home-shift-end';
         if (info?.ok) {
@@ -302,19 +303,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               func:(date) => {
                 const p = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
                   .find(el => (el.textContent || '').trim() === date);
-                if (!p) return false;
-                return [...p.querySelectorAll('b,strong,.se-bold,[style*="font-weight"]')]
+                if (!p) return {bold:false,reason:'date-missing'};
+                const leaf = [...p.querySelectorAll('*')].find(el =>
+                  el.childElementCount === 0 && (el.textContent || '').trim() === date
+                ) || p;
+                const style = window.getComputedStyle(leaf);
+                const weight = Number.parseInt(style.fontWeight,10);
+                const markup = [...p.querySelectorAll('b,strong,.se-bold,[style*="font-weight"],[class*="bold"]')]
                   .some(el => (el.textContent || '').trim() === date);
+                return {bold:markup || weight >= 600,markup,weight:style.fontWeight,
+                  leafTag:leaf.tagName,leafClass:leaf.className || ''};
               },
               args:[date]
             }))[0]?.result;
-            dateBold = !!verified;
+            dateBold = !!verified?.bold;
+            formattingDiagnostics = verified;
           }
         }
         result = dateBold
           ? {status:'input-visible',method:'debugger-Input.insertText',formatting:'date-bold-confirmed'}
           : {status:'formatting-unconfirmed',diagnostics:{
-              info,selectedText:selectionText.slice(0,100),selectionMethod,
+              info,selectedText:selectionText.slice(0,100),selectionMethod,formattingDiagnostics,
               reason:'Date bold was not confirmed'
             }};
       }
