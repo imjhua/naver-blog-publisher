@@ -16,6 +16,21 @@ const status = document.getElementById('status');
         typeof post.storeUrl !== 'string' || !post.storeUrl.startsWith('https://')) {
       throw new Error('승인된 글 형식이 올바르지 않습니다.');
     }
+    // GitHub is the durable publication ledger. A published marker blocks
+    // another autofill even when the editor itself is empty.
+    const publishedResponse=await fetch(
+      'https://raw.githubusercontent.com/imjhua/naver-blog-publisher/main/posts/published/'+encodeURIComponent(post.id)+'.json',
+      {cache:'no-store'}
+    );
+    if(publishedResponse.ok){
+      const published=await publishedResponse.json();
+      if(published.status==='published'&&published.id===post.id){
+        status.textContent='이미 발행된 글입니다. 중복 입력을 차단했습니다.\\n게시 URL: '+published.blogUrl;
+        return;
+      }
+    }else if(publishedResponse.status!==404){
+      throw new Error('발행 이력을 확인할 수 없어 중복 입력을 차단했습니다 (HTTP '+publishedResponse.status+')');
+    }
     const [tab] = await chrome.tabs.query({active:true,lastFocusedWindow:true});
     if (!tab?.id || !tab.url?.startsWith('https://blog.naver.com/')) {
       throw new Error('네이버 블로그 글쓰기 탭에서 실행하세요.');
