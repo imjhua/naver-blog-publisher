@@ -6,6 +6,7 @@
   const output=document.getElementById('finalPublishStatus');
   if(!review||!submit||!output)return;
   let approvedSnapshot=null;
+  let automaticRun=false;
   const inspect=async(tabId)=>{
     const frames=await chrome.scripting.executeScript({
       target:{tabId,allFrames:true},
@@ -70,6 +71,10 @@
     if(success.length!==1)
       throw Error('발행 설정을 안전하게 열지 못했습니다: '+JSON.stringify(results));
   };
+  window.addEventListener('mysore-autopublish',()=>{
+    automaticRun=true;
+    review.click();
+  });
   review.addEventListener('click',async()=>{
     submit.disabled=true;
     approvedSnapshot=null;
@@ -113,7 +118,7 @@
     approvedSnapshot=null;
     submit.disabled=true;
     if(!snapshot)return;
-    if(!confirm('다음 글을 네이버 블로그에 실제로 발행할까요?\n\n'+snapshot.title+'\n\n확인을 누르면 공개 게시가 실행될 수 있습니다.'))return;
+    if(!automaticRun && !confirm('다음 글을 네이버 블로그에 실제로 발행할까요?\n\n'+snapshot.title+'\n\n확인을 누르면 공개 게시가 실행될 수 있습니다.'))return;
     try{
       const [tab]=await chrome.tabs.query({active:true,lastFocusedWindow:true});
       if(tab?.id!==snapshot.tabId)throw Error('글쓰기 탭이 변경됐습니다.');
