@@ -89,6 +89,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const [year,month,day] = post.practiceDate.split('-').map(Number);
     const body = year+'년 '+month+'월 '+day+'일 · '+post.practiceType+
       '\n'+post.storeUrl+'\n\n'+post.content;
+    const waitForLinkCard = async () => {
+      const deadline = Date.now() + 12000;
+      let last = null;
+      while (Date.now() < deadline) {
+        const checks = await chrome.scripting.executeScript({
+          target,
+          func:(url) => {
+            const body = document.querySelector('.se-section-text');
+            const link = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+              .find(p => (p.textContent || '').trim() === url);
+            const cards = [...document.querySelectorAll('.se-section-oglink, .se-module-oglink, .se-component.se-oglink')];
+            const card = cards.find(el => (el.textContent || '').includes('smartstore.naver.com')) || cards[0];
+            if (!link || !card) return {ready:false,link:!!link,card:!!card};
+            const position = link.compareDocumentPosition(card);
+            const afterLink = !!(position & Node.DOCUMENT_POSITION_FOLLOWING);
+            const paragraphs = [...document.querySelectorAll('.se-section-text .se-text-paragraph')];
+            const firstProse = paragraphs.find(p => (p.textContent || '').trim().startsWith('오랜만에 마이솔'));
+            const beforeProse = !firstProse || !!(card.compareDocumentPosition(firstProse) & Node.DOCUMENT_POSITION_FOLLOWING);
+            return {ready:afterLink && beforeProse,afterLink,beforeProse,cardCount:cards.length};
+          },
+          args:[post.storeUrl]
+        });
+        last = checks[0]?.result || {ready:false};
+        if (last.ready) return last;
+        await new Promise(resolve => setTimeout(resolve,300));
+      }
+      return {...last,ready:false};
+    };
     const debuggerTarget = {tabId:tab.id};
     let attached = false;
     let result;
@@ -137,8 +165,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               });
             }
             if (lines[i]) await chrome.debugger.sendCommand(debuggerTarget,'Input.insertText',{text:lines[i]});
+            // The store preview is created asynchronously. Wait before typing
+            // the prose, otherwise SmartEditor may append the card at the end.
+            if (i === 2 && lines[1] === post.storeUrl) {
+              const cardState = await waitForLinkCard();
+              if (!cardState.ready) {
+                result = {status:'link-card-not-confirmed',diagnostics:cardState};
+                break;
+              }
+            }
           }
         }
+        if (result) break;
         const checked = await confirm(field,value);
         if (!checked.ok) {
           result = {status:field+'-not-confirmed',diagnostics:{method:'debugger-Input.insertText',field,...checked}};
