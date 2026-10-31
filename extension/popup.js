@@ -54,7 +54,7 @@ document.getElementById('autoFill').addEventListener('click', async () => {
     if (!response?.ok) throw new Error(response?.error || '자동 입력 요청 실패');
     const result = response.result || {status:'no-result'};
     if (result.status !== 'input-visible') {
-      throw new Error('입력 미완료 (' + result.status + '). 화면을 확인하세요.');
+      throw new Error('입력 미완료 (' + result.status + '). 진단: ' + JSON.stringify(result.diagnostics || {}));
     }
     status.textContent = '자동 입력 결과 확인 필요: 제목과 본문 텍스트가 감지됐습니다. 서식·링크 카드·줄바꿈을 직접 확인하세요. 저장·발행은 실행하지 않았습니다.';
   } catch(error) {
