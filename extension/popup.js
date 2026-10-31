@@ -14,34 +14,45 @@ document.getElementById('fill').addEventListener('click', async () => {
     if (!tab?.id || !tab.url?.startsWith('https://blog.naver.com/')) throw Error('네이버 블로그 글쓰기 탭에서 실행해 주세요.');
     const date = post.practiceDate.split('-').map(Number);
     const bodyText = `${date[0]}년 ${date[1]}월 ${date[2]}일 · ${post.practiceType}\n${post.storeUrl}\n\n${post.content}`;
-    const results = await chrome.scripting.executeScript({
-      target:{tabId:tab.id,allFrames:true},
-      func: ({titleText,bodyText}) => {
-        if (location.hostname !== 'blog.naver.com') return {skip:true};
-        const title = document.querySelector('.se-title-text .se-text-paragraph');
-        const body = document.querySelector('.se-component.se-text .se-text-paragraph');
-        if (!title || !body) return {skip:true};
-        const hasContent = element => !!element.querySelector('.__se-node')?.textContent?.trim();
-        if (hasContent(title) || hasContent(body)) return {error:'이미 작성된 내용이 있어 입력하지 않았습니다.'};
-        const type = (element,text) => {
-          element.click();
-          element.focus();
-          const range = document.createRange();
-          const node = element.querySelector('.__se-node') || element;
-          range.selectNodeContents(node);
-          range.collapse(false);
-          const selection = window.getSelection();
-          selection.removeAllRanges();
-          selection.addRange(range);
-          return document.execCommand('insertText',false,text);
-        };
-        const titleOK = type(title,titleText);
-        const bodyOK = type(body,bodyText);
-        return {titleCommand:titleOK,bodyCommand:bodyOK,titleVisible:document.querySelector('.se-title-text')?.innerText?.includes(titleText) || false,bodyVisible:document.querySelector('.se-component.se-text')?.innerText?.includes(bodyText.slice(0,12)) || false};
-      },
-      args:[{titleText:post.title,bodyText}]
-    });
-    const outcome = results.map(x=>x.result).filter(x=>x&&!x.skip);
-    status.textContent = '입력 테스트 결과 (저장·발행 없음): '+JSON.stringify(outcome,null,2)+'\n실제 글쓰기 화면의 제목·본문도 확인해 주세요.';
+    const probe = await chrome.scripting.executeScript({target:{tabId:tab.id,allFrames:true},func: () => {
+      const title=document.querySelector('.se-title-text .se-text-paragraph');
+      const body=document.querySelector('.se-component.se-text .se-text-paragraph');
+      if(!title||!body)return {match:false};
+      const occupied=e=>!!e.querySelector('.__se-node')?.textContent?.trim();
+      return {match:true,empty:!occupied(title)&&!occupied(body)};
+    }});
+    const matches=probe.filter(r=>r.result?.match);
+    if(matches.length!==1||!matches[0].result.empty)throw Error('빈 글쓰기 에디터를 하나만 찾을 수 있어야 합니다.');
+    const frameId=matches[0].frameId;
+    const target={tabId:tab.id};
+    await chrome.debugger.attach(target,'1.3');
+    try {
+      const focus=async kind=>{
+        const results=await chrome.scripting.executeScript({target:{tabId:tab.id,frameIds:[frameId]},func:(which)=>{
+          const selector=which==='title'?'.se-title-text .se-text-paragraph':'.se-component.se-text .se-text-paragraph';
+          const el=document.querySelector(selector);
+          if(!el)return false;
+          el.click();
+          const node=el.querySelector('.__se-node')||el;
+          const range=document.createRange();
+          range.selectNodeContents(node);range.collapse(false);
+          const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
+          return true;
+        },args:[kind]});
+        if(!results[0]?.result)throw Error('입력 위치를 선택하지 못했습니다: '+kind);
+      };
+      await focus('title');
+      await chrome.debugger.sendCommand(target,'Input.insertText',{text:post.title});
+      await focus('body');
+      await chrome.debugger.sendCommand(target,'Input.insertText',{text:bodyText});
+    } finally {
+      await chrome.debugger.detach(target).catch(()=>{});
+    }
+    const check=await chrome.scripting.executeScript({target:{tabId:tab.id,frameIds:[frameId]},func:({titleText,bodyText})=>({
+      titleVisible:document.querySelector('.se-title-text')?.innerText?.includes(titleText)||false,
+      bodyVisible:document.querySelector('.se-component.se-text')?.innerText?.includes(bodyText.slice(0,12))||false
+    }),args:[{titleText:post.title,bodyText}]});
+    status.textContent='입력 결과 (저장·발행 없음): '+JSON.stringify(check[0]?.result||{},null,2)+'\\n실제 글쓰기 화면을 확인해 주세요.';
+
   } catch(e) {status.textContent='오류: '+e.message;}
 });
