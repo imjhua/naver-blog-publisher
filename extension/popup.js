@@ -36,3 +36,24 @@ const status = document.getElementById('status');
     status.textContent = '자동 입력 실패: '+error.message;
   }
 })();
+
+document.getElementById('inspectPublish').addEventListener('click',async()=>{
+  const output=document.getElementById('publishStatus');
+  output.textContent='발행 화면과 입력 상태를 확인하는 중...';
+  try {
+    const [tab]=await chrome.tabs.query({active:true,lastFocusedWindow:true});
+    if(!tab?.id) throw new Error('활성 탭을 찾지 못했습니다.');
+    const response=await chrome.runtime.sendMessage({type:'inspect-publish-readiness',tabId:tab.id});
+    if(!response?.ok) throw new Error(response?.error||'상태 확인 실패');
+    const r=response.result;
+    output.textContent=[
+      '제목: '+(r.title||'없음'),
+      '날짜: '+(r.hasDate?'확인':'미확인'),
+      '스토어 URL: '+(r.hasStoreUrl?'확인':'미확인'),
+      '미리보기 카드: '+(r.hasCard?'확인':'미확인'),
+      '본문: '+(r.hasProse?'확인':'미확인'),
+      '발행 관련 버튼: '+(r.publishControls.map(x=>x.label).join(', ')||'감지되지 않음'),
+      '실제 발행: 실행하지 않음'
+    ].join('\\n');
+  } catch(error) {output.textContent='확인 실패: '+error.message;}
+});
