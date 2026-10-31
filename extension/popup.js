@@ -49,13 +49,11 @@ document.getElementById('loadGithub').addEventListener('click', async () => {
 document.getElementById('autoFill').addEventListener('click', async () => {
   try {
     ensurePost();
-    const tabs = await chrome.tabs.query({active:true,lastFocusedWindow:true});
+    // Chrome may omit tab.url in extension popups. Do not use URL as a gate;
+    // the injected script verifies the Naver editor structure instead.
+    const tabs = await chrome.tabs.query({active:true,currentWindow:true});
     const tab = tabs[0];
-    if (!tab?.id) throw new Error('현재 Chrome 탭을 찾지 못했습니다.');
-    const currentUrl = tab.url || tab.pendingUrl || '';
-    if (!/^https:\/\/blog\.naver\.com\//.test(currentUrl)) {
-      throw new Error('네이버 글쓰기 탭을 찾지 못했습니다. 감지된 주소: ' + (currentUrl || '(주소 읽기 불가)'));
-    }
+    if (!tab?.id) throw new Error('활성 탭을 찾지 못했습니다.');
     status.textContent = '빈 에디터인지 확인하고 입력하는 중...';
     await chrome.scripting.executeScript({
       target:{tabId:tab.id,allFrames:true},files:['editor-fill.js']
