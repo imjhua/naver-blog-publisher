@@ -103,6 +103,9 @@
         throw Error('필수 검증을 통과하지 못했습니다. 발행은 차단했습니다.');
       approvedSnapshot={tabId:tab.id,title:state.title,date:state.date,paragraphCount:state.paragraphCount};
       submit.disabled=false;
+      // One user click runs review, then presents the existing native
+      // confirmation. No final submit happens until the user accepts it.
+      submit.click();
     }catch(error){output.textContent+='\n발행 준비 실패: '+error.message;}
   });
   submit.addEventListener('click',async()=>{
