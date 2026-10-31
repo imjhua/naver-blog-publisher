@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "title": ".se-title-text .se-text-paragraph",
+  "body": ".se-section-text .se-module-text .se-text-paragraph",
+  "waitMs": 1500
+}
