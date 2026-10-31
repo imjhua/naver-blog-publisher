@@ -35,6 +35,7 @@ document.getElementById('loadGithub').addEventListener('click', async () => {
       throw new Error('승인된 게시글 JSON 형식이 아닙니다.');
     }
     post = parsed;
+    await chrome.runtime.sendMessage({type:'approved-post-loaded',post});
     status.textContent = '최신 승인 글 불러오기 완료: ' + post.title;
   } catch(error) {status.textContent = '오류: ' + error.message;}
 });
