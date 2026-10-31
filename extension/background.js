@@ -288,23 +288,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               }
             }))[0]?.result || [];
             selectionText = selectionState.find(s => s.trim() === date) || selectionState[0] || '';
-            if (selectionText.trim() === date) {
-              const mac = (await chrome.scripting.executeScript({
-                target,func:() => /Mac/i.test(navigator.platform)
-              }))[0]?.result;
-              await key('b','KeyB',mac?4:2);
-              const verified = (await chrome.scripting.executeScript({
-                target,
-                func:(date) => {
-                  const p = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
-                    .find(el => (el.textContent || '').trim() === date);
-                  return !!p && [...p.querySelectorAll('b,strong,.se-bold,[style*="font-weight"]')]
-                    .some(el => (el.textContent || '').trim() === date);
-                },
-                args:[date]
-              }))[0]?.result;
-              dateBold = !!verified;
-            }
+            // Chrome's isolated extension world may report an empty selection
+            // even when SmartEditor's floating toolbar shows the selected text.
+            // Home + Shift+End targets only the date paragraph. Apply bold once,
+            // then verify the actual rendered formatting rather than trusting
+            // window.getSelection() across execution worlds.
+            const mac = (await chrome.scripting.executeScript({
+              target,func:() => /Mac/i.test(navigator.platform)
+            }))[0]?.result;
+            await key('b','KeyB',mac?4:2);
+            const verified = (await chrome.scripting.executeScript({
+              target,
+              func:(date) => {
+                const p = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+                  .find(el => (el.textContent || '').trim() === date);
+                if (!p) return false;
+                return [...p.querySelectorAll('b,strong,.se-bold,[style*="font-weight"]')]
+                  .some(el => (el.textContent || '').trim() === date);
+              },
+              args:[date]
+            }))[0]?.result;
+            dateBold = !!verified;
           }
         }
         result = dateBold
