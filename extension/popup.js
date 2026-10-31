@@ -16,6 +16,11 @@ const status = document.getElementById('status');
         typeof post.storeUrl !== 'string' || !post.storeUrl.startsWith('https://')) {
       throw new Error('승인된 글 형식이 올바르지 않습니다.');
     }
+    const {lastPublished}=await chrome.storage.local.get('lastPublished');
+    if(lastPublished?.title===post.title){
+      status.textContent='이 브라우저에서 발행 완료를 확인한 글입니다. 재입력을 차단했습니다.\\n게시 URL: '+lastPublished.blogUrl;
+      return;
+    }
     // GitHub is the durable publication ledger. A published marker blocks
     // another autofill even when the editor itself is empty.
     const publishedResponse=await fetch(
