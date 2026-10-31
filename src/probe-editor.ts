@@ -4,7 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 /** Read-only probe: never types, clicks publish, or saves a draft. */
 const profile = process.env.NAVER_PROFILE_DIR ?? '.local/naver-profile';
 await mkdir(profile, { recursive: true });
-const browser = await chromium.launchPersistentContext(profile, { headless: false });
+const browser = await chromium.launchPersistentContext(profile, { channel: 'chrome', headless: false });
 const page = await browser.newPage();
 const blogUrl = process.env.NAVER_BLOG_URL ?? 'https://blog.naver.com/my-mysore';
 await page.goto(blogUrl, { waitUntil: 'domcontentloaded' });
