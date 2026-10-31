@@ -251,6 +251,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       }
       if (!result) {
+        const alreadyBold = (await chrome.scripting.executeScript({
+          target,
+          func:(date) => {
+            const p=[...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+              .find(el=>(el.textContent||'').trim()===date);
+            if (!p) return false;
+            const spans=[...p.querySelectorAll('span.__se-node')];
+            return spans.length>0 && spans.every(el=>
+              Number.parseInt(getComputedStyle(el).fontWeight,10)>=600 ||
+              /se-bold/.test(el.className));
+          },
+          args:[body.split('\\n')[0]]
+        }))[0]?.result;
+        if (alreadyBold) {
+          result={status:'input-visible',formatting:'date-bold-confirmed'};
+        }
+      }
+      if (!result) {
         // Select the first paragraph with keyboard navigation after clicking
         // its text. Drag selection across SmartEditor iframe is unreliable.
         const date = body.split('\n')[0];
