@@ -23,6 +23,10 @@ const status = document.getElementById('status');
     status.textContent = '제목과 본문을 자동 입력하는 중...';
     const result = await chrome.runtime.sendMessage({type:'fill-approved-post',post});
     if (!result?.ok) throw new Error(result?.error || '입력 요청 실패');
+    if (result.result?.status === 'already-running') {
+      status.textContent = '이미 자동 입력이 진행 중입니다. 다시 실행하지 않았습니다.';
+      return;
+    }
     if (result.result?.status !== 'input-visible') {
       throw new Error('입력 미완료 ('+(result.result?.status || 'unknown')+
         ') '+JSON.stringify(result.result?.diagnostics || {}));
