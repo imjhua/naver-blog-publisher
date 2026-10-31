@@ -231,10 +231,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             p.scrollIntoView({block:'center'});
             const range = document.createRange();
             range.selectNodeContents(p);
+            // SmartEditor may return several rectangles for one visual line
+            // because its text is split across nested inline spans.
             const rects = [...range.getClientRects()].filter(r => r.width > 0 && r.height > 0);
-            if (rects.length !== 1) return {ok:false,reason:'date-multiline',rectCount:rects.length};
-            const r = rects[0];
-            return {ok:true,x1:r.left+2,x2:r.right-2,y:r.top+r.height/2};
+            if (!rects.length) return {ok:false,reason:'date-no-rects'};
+            const sorted = rects.slice().sort((a,b) => a.left-b.left);
+            const top = Math.min(...rects.map(r => r.top));
+            const bottom = Math.max(...rects.map(r => r.bottom));
+            const sameLine = rects.every(r => Math.abs((r.top+r.bottom)/2-(top+bottom)/2) < Math.max(5,r.height/2));
+            if (!sameLine) return {ok:false,reason:'date-wraps',rectCount:rects.length};
+            const left = Math.min(...rects.map(r => r.left));
+            const right = Math.max(...rects.map(r => r.right));
+            return {ok:right-left>8,x1:left+1,x2:right-1,y:(top+bottom)/2,rectCount:rects.length};
           },
           args:[date]
         });
