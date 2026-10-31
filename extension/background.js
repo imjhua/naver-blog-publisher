@@ -226,20 +226,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
               type:'mouseReleased',x,y,button:'left',clickCount:1
             });
-            const bodyFocused=(await chrome.scripting.executeScript({
-              target,world:'MAIN',
-              func:()=>{
-                const sel=window.getSelection();
-                const node=sel?.anchorNode;
-                const el=node?.nodeType===Node.ELEMENT_NODE?node:node?.parentElement;
-                const p=el?.closest('.se-section-text .se-text-paragraph');
-                return !!p && !(p.textContent||'').trim();
-              }
-            }))[0]?.result;
-            if(!bodyFocused){
-              result={status:'date-caret-not-ready',diagnostics:{stage:'before-date-insertion'}};
-              break;
-            }
+
           }
           const lines = resumeBody ? post.content.split('\n') : value.split('\n');
           let nextParagraphPrepared = false;
