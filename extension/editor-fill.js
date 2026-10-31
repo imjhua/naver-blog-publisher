@@ -14,28 +14,40 @@ function fillApprovedPostInFrame(post) {
   function typeInto(el,value) {
     el.click();
     el.focus();
-    const range = document.createRange();
+    const active = document.activeElement;
+    const selection = window.getSelection();
     const node = el.querySelector('span.__se-node') || el;
+    const range = document.createRange();
     range.selectNodeContents(node);
     range.collapse(false);
-    const selection = window.getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
-    // SmartEditor may reject insertText. Try HTML insertion as a fallback,
-    // preserving plain text only; never interpolate unescaped markup.
-    const inserted = document.execCommand('insertText', false, value);
-    if (inserted && el.textContent?.includes(value)) return true;
-    if (el.textContent?.includes(value)) return true;
-    const escapeHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const before = {
+      activeTag: active?.tagName || null,
+      activeEditable: active?.getAttribute('contenteditable') || null,
+      elementEditable: el.isContentEditable,
+      nodeEditable: node.isContentEditable,
+      selectionCount: selection.rangeCount,
+      selectionInside: !!selection.anchorNode && el.contains(selection.anchorNode),
+      nodeTag: node.tagName,
+      frameUrlPath: location.pathname
+    };
+    const textResult = document.execCommand('insertText',false,value);
+    if (el.textContent?.includes(value)) return {ok:true,method:'insertText'};
+    const escapeHtml = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const html = value.split('\\n').map(escapeHtml).join('<br>');
-    return document.execCommand('insertHTML', false, html) &&
-      !!el.textContent?.includes(value.split('\\n')[0]);
+    const htmlResult = document.execCommand('insertHTML',false,html);
+    if (el.textContent?.includes(value.split('\\n')[0])) return {ok:true,method:'insertHTML'};
+    return {ok:false,diagnostics:{...before,textResult,htmlResult,
+      activeAfter:document.activeElement?.tagName || null,
+      selectedText:selection.toString().slice(0,60)}};
   }
   // Input only. The SmartEditor may reject synthetic editing commands.
-  if (!typeInto(title,post.title)) return {status:'title-command-failed'};
+  const titleResult = typeInto(title,post.title);
+  if (!titleResult.ok) return {status:'title-command-failed',diagnostics:titleResult.diagnostics};
   if (!title.textContent.includes(post.title)) return {status:'title-not-confirmed'};
-  if (!typeInto(body,content)) return {status:'body-command-failed'};
+  const bodyResult = typeInto(body,content);
+  if (!bodyResult.ok) return {status:'body-command-failed',diagnostics:bodyResult.diagnostics};
   const bodyText = document.querySelector('.se-section-text .se-module-text')?.textContent || '';
   return {status:bodyText.includes(post.content.slice(0,25)) ? 'input-visible' : 'body-not-confirmed',
     titleVisible:title.textContent.includes(post.title)};
