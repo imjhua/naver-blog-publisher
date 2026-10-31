@@ -37,3 +37,35 @@ document.getElementById('copyBody').addEventListener('click', async () => {
     status.textContent = '본문 복사 완료. 네이버 본문 칸에 ⌘V로 붙여넣으세요.';
   } catch (error) { status.textContent = '오류: ' + error.message; }
 });
+const escapeHtml = value => value.replace(/[&<>"']/g, character => ({
+  '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+})[character]);
+const boldHtml = value => value.split(/(\\*\\*[^*\\n]+\\*\\*)/g).map(segment =>
+  segment.startsWith('**') && segment.endsWith('**')
+    ? '<strong>' + escapeHtml(segment.slice(2,-2)) + '</strong>'
+    : escapeHtml(segment)
+).join('');
+const makeRichBody = data => {
+  const [year,month,day] = data.practiceDate.split('-').map(Number);
+  const dateLine = `${year}년 ${month}월 ${day}일 · ${data.practiceType}`;
+  const paragraphs = data.content.split(/\\n\\s*\\n/).map(p =>
+    '<p>' + p.split('\\n').map(boldHtml).join('<br>') + '</p>'
+  ).join('');
+  const html = '<html><body><p><em>' + escapeHtml(dateLine) +
+    '</em></p><p><a href="' + escapeHtml(data.storeUrl) + '">' +
+    escapeHtml(data.storeUrl) + '</a></p><p><br></p>' + paragraphs + '</body></html>';
+  const plain = dateLine + '\\n' + data.storeUrl + '\\n\\n' + data.content.replace(/\\*\\*([^*\\n]+)\\*\\*/g,'$1');
+  return {html,plain};
+};
+document.getElementById('copyRichBody').addEventListener('click', async () => {
+  try {
+    ensurePost();
+    const {html,plain} = makeRichBody(post);
+    if (!window.ClipboardItem || !navigator.clipboard?.write) throw new Error('서식 클립보드를 지원하지 않는 브라우저입니다. 일반 본문 복사를 사용하세요.');
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html':new Blob([html],{type:'text/html'}),
+      'text/plain':new Blob([plain],{type:'text/plain'})
+    })]);
+    status.textContent = '서식 포함 본문 복사 완료. 네이버 본문에 ⌘V로 붙여넣고 날짜 Italic, 강조 Bold, 문단을 확인하세요. 링크 카드 생성은 별도 검증이 필요합니다.';
+  } catch(error) { status.textContent='오류: '+error.message; }
+});
