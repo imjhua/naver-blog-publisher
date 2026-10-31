@@ -66,7 +66,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const paragraphs = [...root.querySelectorAll('.se-text-paragraph')]
               .map(el => (el.textContent || '').trim());
             if (field === 'title') return {ok:paragraphs.join(' ').includes(expected),paragraphs};
-            const expectedLines = expected.split('\\n').filter(Boolean);
+            const expectedLines = expected.split('\n').filter(Boolean);
             const visible = paragraphs.join(' ');
             const matched = expectedLines.every(line => visible.includes(line));
             const hasSeparateDateAndLink = paragraphs.some(p => p.startsWith(expectedLines[0])) &&
