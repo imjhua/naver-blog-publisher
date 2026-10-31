@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
 
 const post=JSON.parse(fs.readFileSync('posts/latest.json','utf8'));
 const requested=process.env.PUBLISH==='true'||process.argv.includes('--publish');
-if(post.status!=='approved'||!/^\d{4}-\d{2}-\d{2}$/.test(post.id)||
+if(post.status!=='approved'||!/^\d{4}-\d{2}-\d{2}(?:-[a-z0-9-]+)?$/.test(post.id)||
   !post.title?.startsWith('[요가 수련일지]')||!post.content?.trim()||
   !/^\d{4}-\d{2}-\d{2}$/.test(post.practiceDate)||
   !post.practiceType||!/^https:\/\/smartstore\.naver\.com\//.test(post.storeUrl))
