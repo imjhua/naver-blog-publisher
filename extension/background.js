@@ -104,7 +104,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const x = offset.x+prepared.x, y = offset.y+prepared.y;
         await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});
         await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});
-        await chrome.debugger.sendCommand(debuggerTarget,'Input.insertText',{text:value});
+        if (field === 'title') {
+          await chrome.debugger.sendCommand(debuggerTarget,'Input.insertText',{text:value});
+        } else {
+          // SmartEditor treats embedded newlines in Input.insertText as plain
+          // characters. Send each line separately and use real Enter events.
+          const lines = value.split('\\n');
+          for (let i = 0; i < lines.length; i++) {
+            if (i > 0) {
+              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
+                type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13
+              });
+              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
+                type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13
+              });
+            }
+            if (lines[i]) await chrome.debugger.sendCommand(debuggerTarget,'Input.insertText',{text:lines[i]});
+          }
+        }
         if (!(await confirm(field,value))) {
           result = {status:field+'-not-confirmed',diagnostics:{method:'debugger-Input.insertText',field}};
           break;
