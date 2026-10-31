@@ -21,15 +21,82 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const matches = frames.filter(frame => frame.result?.host === 'blog.naver.com' && frame.result.editor);
     if (matches.length !== 1) throw new Error('네이버 에디터 프레임 감지 실패 (' + matches.length + '개).');
     const frameId = matches[0].frameId;
-    await chrome.scripting.executeScript({
-      target:{tabId:tab.id,frameIds:[frameId]},files:['editor-fill.js']
-    });
-    const results = await chrome.scripting.executeScript({
-      target:{tabId:tab.id,frameIds:[frameId]},
-      func:(approved) => globalThis.fillApprovedPostInFrame?.(approved) ?? {status:'helper-not-loaded'},
-      args:[post]
-    });
-    sendResponse({ok:true,result:results[0]?.result});
+    // Selectors and wait times are data, never remote executable code.
+    let config = {title:'.se-title-text .se-text-paragraph',body:'.se-section-text .se-module-text .se-text-paragraph',waitMs:1500};
+    try {
+      const response = await fetch('https://raw.githubusercontent.com/imjhua/naver-blog-publisher/main/extension/editor-config.json',{cache:'no-store'});
+      if (response.ok) {
+        const remote = await response.json();
+        if (remote.schemaVersion === 1 && typeof remote.title === 'string' &&
+            typeof remote.body === 'string' && remote.title.length < 200 && remote.body.length < 200) {
+          config = {title:remote.title,body:remote.body,waitMs:Math.min(5000,Math.max(250,Number(remote.waitMs)||1500))};
+        }
+      }
+    } catch (_) { /* keep bundled defaults */ }
+    const target = {tabId:tab.id,frameIds:[frameId]};
+    const prepare = async (field) => {
+      const results = await chrome.scripting.executeScript({
+        target,
+        func:(selector,otherSelector) => {
+          const element = document.querySelector(selector);
+          const other = document.querySelector(otherSelector);
+          if (!element || !other) return {status:'selector-missing'};
+          const value = element.textContent?.trim() || '';
+          const placeholder = fieldPlaceholder => value === fieldPlaceholder;
+          if (value && !placeholder('제목') && !placeholder('글감과 함께 나의 일상을 기록해보세요!')) {
+            return {status:'not-empty',value:value.slice(0,70)};
+          }
+          element.click();
+          const frame = document.activeElement;
+          let editable = false;
+          try {editable = frame?.tagName === 'IFRAME' && !!frame.contentDocument?.querySelector('body[contenteditable="true"]');}
+          catch (_) {}
+          return {status:editable ? 'ready' : 'input-frame-missing'};
+        },
+        args:[field === 'title' ? config.title : config.body,field === 'title' ? config.body : config.title]
+      });
+      return results[0]?.result || {status:'no-result'};
+    };
+    const confirm = async (field,value) => {
+      const selector = field === 'title' ? config.title : config.body;
+      const firstLine = value.split('\\n')[0];
+      const end = Date.now() + config.waitMs;
+      do {
+        const results = await chrome.scripting.executeScript({
+          target,func:(s,text) => !!document.querySelector(s)?.textContent?.includes(text),
+          args:[selector,firstLine]
+        });
+        if (results[0]?.result) return true;
+        await new Promise(resolve=>setTimeout(resolve,200));
+      } while (Date.now() < end);
+      return false;
+    };
+    const [year,month,day] = post.practiceDate.split('-').map(Number);
+    const body = year+'년 '+month+'월 '+day+'일 · '+post.practiceType+
+      '\\n'+post.storeUrl+'\\n\\n'+post.content;
+    const debuggerTarget = {tabId:tab.id};
+    let attached = false;
+    let result;
+    try {
+      await chrome.debugger.attach(debuggerTarget,'1.3');
+      attached = true;
+      for (const [field,value] of [['title',post.title],['body',body]]) {
+        const prepared = await prepare(field);
+        if (prepared.status !== 'ready') {
+          result = {status:field+'-'+prepared.status,diagnostics:prepared};
+          break;
+        }
+        await chrome.debugger.sendCommand(debuggerTarget,'Input.insertText',{text:value});
+        if (!(await confirm(field,value))) {
+          result = {status:field+'-not-confirmed',diagnostics:{method:'debugger-Input.insertText',field}};
+          break;
+        }
+      }
+      if (!result) result = {status:'input-visible',method:'debugger-Input.insertText'};
+    } finally {
+      if (attached) await chrome.debugger.detach(debuggerTarget).catch(()=>{});
+    }
+    sendResponse({ok:true,result});
   })().catch(error => sendResponse({ok:false,error:error.message}));
   return true;
 });
