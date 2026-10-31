@@ -56,18 +56,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return results[0]?.result || {status:'no-result'};
     };
     const confirm = async (field,value) => {
-      const selector = field === 'title' ? config.title : config.body;
-      const firstLine = value.split('\n')[0];
-      const end = Date.now() + config.waitMs;
+      const end = Date.now() + Math.max(config.waitMs,2500);
       do {
         const results = await chrome.scripting.executeScript({
-          target,func:(s,text) => !!document.querySelector(s)?.textContent?.includes(text),
-          args:[selector,firstLine]
+          target,
+          func:(field,expected) => {
+            const root = document.querySelector(field === 'title' ? '.se-title' : '.se-section-text');
+            if (!root) return {ok:false,reason:'root-missing'};
+            const paragraphs = [...root.querySelectorAll('.se-text-paragraph')]
+              .map(el => (el.textContent || '').trim());
+            if (field === 'title') return {ok:paragraphs.join(' ').includes(expected),paragraphs};
+            const expectedLines = expected.split('\\n').filter(Boolean);
+            const visible = paragraphs.join(' ');
+            const matched = expectedLines.every(line => visible.includes(line));
+            const hasSeparateDateAndLink = paragraphs.some(p => p.startsWith(expectedLines[0])) &&
+              paragraphs.some(p => p === expectedLines[1]);
+            return {ok:matched && hasSeparateDateAndLink,paragraphCount:paragraphs.length,
+              matched,hasSeparateDateAndLink,preview:paragraphs.slice(0,5)};
+          },
+          args:[field,value]
         });
-        if (results[0]?.result) return true;
+        if (results[0]?.result?.ok) return {ok:true};
+        if (Date.now() >= end) return results[0]?.result || {ok:false};
         await new Promise(resolve=>setTimeout(resolve,200));
-      } while (Date.now() < end);
-      return false;
+      } while (true);
     };
     const [year,month,day] = post.practiceDate.split('-').map(Number);
     const body = year+'년 '+month+'월 '+day+'일 · '+post.practiceType+
@@ -109,7 +121,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } else {
           // SmartEditor treats embedded newlines in Input.insertText as plain
           // characters. Send each line separately and use real Enter events.
-          const lines = value.split('\\n');
+          const lines = value.split('\n');
           for (let i = 0; i < lines.length; i++) {
             if (i > 0) {
               await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
@@ -122,8 +134,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (lines[i]) await chrome.debugger.sendCommand(debuggerTarget,'Input.insertText',{text:lines[i]});
           }
         }
-        if (!(await confirm(field,value))) {
-          result = {status:field+'-not-confirmed',diagnostics:{method:'debugger-Input.insertText',field}};
+        const checked = await confirm(field,value);
+        if (!checked.ok) {
+          result = {status:field+'-not-confirmed',diagnostics:{method:'debugger-Input.insertText',field,...checked}};
           break;
         }
       }
