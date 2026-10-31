@@ -4,12 +4,7 @@
   "version": "0.1.0",
   "description": "Fill a reviewed yoga journal draft in the owner's Naver Blog editor. Never publishes automatically.",
   "permissions": [
-    "activeTab",
-    "scripting",
-    "debugger"
-  ],
-  "host_permissions": [
-    "https://blog.naver.com/*"
+    "clipboardWrite"
   ],
   "action": {
     "default_popup": "popup.html"
