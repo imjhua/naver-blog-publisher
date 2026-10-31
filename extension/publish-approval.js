@@ -30,11 +30,15 @@
           paragraphCount:ps.length,finalCount:final.length,settingsOpen:close.length>0,settings};
       }
     });
-    const editors=frames.map(x=>x.result).filter(x=>x?.title);
-    // The editor can exist in more than one frame. Prefer the frame with
-    // the visible publish settings, not the first frame with a title.
-    return editors.find(x=>x.settingsOpen&&x.finalCount===1)||
-      editors.find(x=>x.settingsOpen)||editors[0]||null;
+    const results=frames.map(x=>x.result).filter(Boolean);
+    const editor=results.find(x=>x.title&&x.date&&x.card)||
+      results.find(x=>x.title);
+    if(!editor)return null;
+    // Editor content and publish controls may live in different frames.
+    const panels=results.filter(x=>x.settingsOpen&&x.finalCount>0);
+    const panel=panels.length===1?panels[0]:null;
+    return {...editor,settingsOpen:!!panel,finalCount:panel?.finalCount||0,
+      settings:panel?.settings||[],panelCount:panels.length};
   };
   const openSettings=async(tabId)=>{
     const frames=await chrome.scripting.executeScript({
