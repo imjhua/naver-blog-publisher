@@ -297,7 +297,45 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const mac = (await chrome.scripting.executeScript({
               target,func:() => /Mac/i.test(navigator.platform)
             }))[0]?.result;
-            await key('b','KeyB',mac?4:2);
+            // Use the native SmartEditor floating toolbar. On macOS, the
+            // debugger's synthetic Cmd+B can leave selection intact without
+            // applying the command. A real mouse click on the visible B button
+            // uses the editor's own formatting handler.
+            const toolbar = (await chrome.scripting.executeScript({
+              target,
+              func:() => {
+                const p = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+                  .find(el => el.classList.contains('se-is-text-paragraph-block-selected'));
+                const buttons = [...document.querySelectorAll('button,[role="button"]')];
+                const candidates = buttons.filter(el => {
+                  const label = [el.getAttribute('aria-label'),el.getAttribute('title'),
+                    el.className,el.textContent].filter(Boolean).join(' ').toLowerCase();
+                  return /bold|굵게|se-toolbar-button-bold|se-button-bold/.test(label);
+                }).filter(el => {
+                  const r = el.getBoundingClientRect();
+                  return r.width > 0 && r.height > 0;
+                });
+                const el = candidates.sort((a,b) => {
+                  const ra=a.getBoundingClientRect(),rb=b.getBoundingClientRect();
+                  return Math.abs(ra.top-(p?.getBoundingClientRect().top||0))-
+                    Math.abs(rb.top-(p?.getBoundingClientRect().top||0));
+                })[0];
+                if (!el) return {ok:false,candidateCount:0};
+                const r = el.getBoundingClientRect();
+                return {ok:true,x:r.left+r.width/2,y:r.top+r.height/2,
+                  label:el.getAttribute('aria-label')||el.getAttribute('title')||el.className};
+              }
+            }))[0]?.result;
+            if (toolbar?.ok) {
+              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+                type:'mousePressed',x:offset.x+toolbar.x,y:offset.y+toolbar.y,button:'left',clickCount:1
+              });
+              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+                type:'mouseReleased',x:offset.x+toolbar.x,y:offset.y+toolbar.y,button:'left',clickCount:1
+              });
+            } else {
+              await key('b','KeyB',mac?4:2);
+            }
             const verified = (await chrome.scripting.executeScript({
               target,
               func:(date) => {
@@ -317,7 +355,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               args:[date]
             }))[0]?.result;
             dateBold = !!verified?.bold;
-            formattingDiagnostics = verified;
+            formattingDiagnostics = {...verified,toolbar};
           }
         }
         result = dateBold
