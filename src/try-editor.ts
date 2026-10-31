@@ -6,7 +6,7 @@ const file = process.argv[2];
 if (!file) throw new Error('Usage: npx tsx src/try-editor.ts posts/example.json');
 const post = JSON.parse(readFileSync(file, 'utf8'));
 const profile = process.env.NAVER_PROFILE_DIR ?? '.local/naver-profile';
-const context = await chromium.launchPersistentContext(profile, { headless: false });
+const context = await chromium.launchPersistentContext(profile, { channel: 'chrome', headless: false });
 try {
   const page = await context.newPage();
   await page.goto('https://blog.naver.com/my-mysore?Redirect=Write', { waitUntil: 'domcontentloaded' });
