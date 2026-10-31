@@ -263,6 +263,67 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 if (dateCheck.present && dateCheck.bold) break;
                 await new Promise(resolve => setTimeout(resolve,200));
               }
+              // Repair a date that was inserted without bold, before any URL/prose.
+              // Select the exact date DOM text and apply the editor's native Bold
+              // command once; never toggle bold on already-bold text.
+              if (dateCheck.present && !dateCheck.bold) {
+                const selection = (await chrome.scripting.executeScript({
+                  target,world:'MAIN',
+                  func:(date)=>{
+                    const p=[...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+                      .find(el=>(el.textContent||'').trim()===date);
+                    if(!p)return false;
+                    const walker=document.createTreeWalker(p,NodeFilter.SHOW_TEXT);
+                    let first=null,last=null;
+                    while(walker.nextNode()){
+                      const n=walker.currentNode;
+                      if(!n.textContent)continue;
+                      if(!first)first=n;
+                      last=n;
+                    }
+                    if(!first||!last)return false;
+                    const range=document.createRange();
+                    range.setStart(first,0);
+                    range.setEnd(last,last.textContent.length);
+                    const sel=window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    return sel.toString().trim()===date;
+                  },
+                  args:[lines[0]]
+                }))[0]?.result;
+                if (selection) {
+                  await clickBold();
+                  await new Promise(resolve=>setTimeout(resolve,250));
+                  dateCheck = (await chrome.scripting.executeScript({
+                    target,
+                    func:(date)=>{
+                      const p=[...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+                        .find(el=>(el.textContent||'').trim()===date);
+                      if(!p)return {present:false,bold:false};
+                      const walker=document.createTreeWalker(p,NodeFilter.SHOW_TEXT);
+                      const parts=[];
+                      while(walker.nextNode()){
+                        const n=walker.currentNode;
+                        if(!n.textContent.trim())continue;
+                        let e=n.parentElement,bold=false;
+                        while(e&&e!==p.parentElement){
+                          if(e.matches('b,strong')||Number.parseInt(getComputedStyle(e).fontWeight,10)>=600){bold=true;break;}
+                          e=e.parentElement;
+                        }
+                        parts.push(bold);
+                      }
+                      return {present:true,bold:parts.length>0&&parts.every(Boolean)};
+                    },
+                    args:[lines[0]]
+                  }))[0]?.result||{present:false,bold:false};
+                }
+                if (!dateCheck.bold) {
+                  result={status:'date-bold-repair-failed',
+                    diagnostics:{stage:'before-link-insertion',selectionMatched:!!selection}};
+                  break;
+                }
+              }
               // Date presence is a hard gate. Bold is a diagnostic only:
               // SmartEditor's toolbar/typing state can be correct even when
               // computed DOM weight is not observable through this frame.
