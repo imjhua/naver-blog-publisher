@@ -51,7 +51,8 @@ const status = document.getElementById('status');
       throw new Error('입력 미완료 ('+(result.result?.status || 'unknown')+
         ') '+JSON.stringify(result.result?.diagnostics || {}));
     }
-    status.textContent = '입력 완료. 제목, 문단, 서식을 확인하세요. 저장·발행하지 않았습니다.';
+    status.textContent = '자동 입력 완료. 발행 설정 검증과 게시를 자동 진행합니다...';
+    window.dispatchEvent(new Event('mysore-autopublish'));
   } catch (error) {
     status.textContent = '자동 입력 실패: '+error.message;
   }
