@@ -49,26 +49,10 @@ document.getElementById('loadGithub').addEventListener('click', async () => {
 document.getElementById('autoFill').addEventListener('click', async () => {
   try {
     ensurePost();
-    // Chrome may omit tab.url in extension popups. Do not use URL as a gate;
-    // the injected script verifies the Naver editor structure instead.
-    const tabs = await chrome.tabs.query({active:true,currentWindow:true});
-    const tab = tabs[0];
-    if (!tab?.id) throw new Error('활성 탭을 찾지 못했습니다.');
-    status.textContent = '빈 에디터인지 확인하고 입력하는 중...';
-    await chrome.scripting.executeScript({
-      target:{tabId:tab.id,allFrames:true},files:['editor-fill.js']
-    });
-    const results = await chrome.scripting.executeScript({
-      target:{tabId:tab.id,allFrames:true},
-      func:(approved) => globalThis.fillApprovedPostInFrame?.(approved) ?? {status:'not-editor-frame'},
-      args:[post]
-    });
-    const outcomes = results.map(item => item.result).filter(Boolean);
-    const active = outcomes.filter(item => item.status !== 'not-editor-frame' && item.status !== 'not-visible');
-    if (active.length !== 1) {
-      throw new Error('편집기 인식 실패 또는 중복 감지: ' + JSON.stringify(active));
-    }
-    const result = active[0];
+    status.textContent = '네이버 에디터를 확인하고 입력하는 중...';
+    const response = await chrome.runtime.sendMessage({type:'fill-approved-post',post});
+    if (!response?.ok) throw new Error(response?.error || '자동 입력 요청 실패');
+    const result = response.result || {status:'no-result'};
     if (result.status !== 'input-visible') {
       throw new Error('입력 미완료 (' + result.status + '). 화면을 확인하세요.');
     }
