@@ -293,7 +293,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                   args:[lines[0]]
                 }))[0]?.result;
                 if (selection) {
-                  await clickBold();
+                  // Apply bold to the exact selected date using the editor's
+                  // keyboard shortcut. Clicking the toolbar can destroy the
+                  // selection and only toggle the *next typing* state.
+                  const mac = /Mac/.test((await chrome.scripting.executeScript({
+                    target,func:()=>navigator.platform
+                  }))[0]?.result||'');
+                  const modifiers = mac ? 4 : 2;
+                  await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
+                    type:'rawKeyDown',key:'b',code:'KeyB',windowsVirtualKeyCode:66,
+                    nativeVirtualKeyCode:66,modifiers
+                  });
+                  await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
+                    type:'keyUp',key:'b',code:'KeyB',windowsVirtualKeyCode:66,
+                    nativeVirtualKeyCode:66,modifiers
+                  });
                   await new Promise(resolve=>setTimeout(resolve,250));
                   dateCheck = (await chrome.scripting.executeScript({
                     target,
