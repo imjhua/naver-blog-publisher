@@ -219,7 +219,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
             return true;
           };
-          if (!resumeBody) preBold = await clickBold();
+          // Keep the validated insertion path unchanged; do not toggle formatting before typing.
+          // Date styling is handled only after the complete body is present.
+          preBold = false;
           if (resumeBody) {
             // Resume from the end of the existing URL, without duplicating it.
             for (const [type,key,code,virtual] of [
