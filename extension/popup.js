@@ -18,6 +18,26 @@ document.getElementById('file').addEventListener('change', async event => {
     status.textContent = '파일 준비 완료: ' + post.title;
   } catch (error) { status.textContent = '오류: ' + error.message; }
 });
+document.getElementById('loadGithub').addEventListener('click', async () => {
+  try {
+    post = null;
+    status.textContent = 'GitHub에서 승인 글을 불러오는 중...';
+    const url = 'https://raw.githubusercontent.com/imjhua/naver-blog-publisher/main/posts/example.json';
+    const response = await fetch(url, {cache:'no-store'});
+    if (!response.ok) throw new Error('GitHub 불러오기 실패: HTTP ' + response.status);
+    const parsed = await response.json();
+    if (parsed.status !== 'approved' || typeof parsed.title !== 'string' ||
+        !parsed.title.startsWith('[요가 수련일지]') ||
+        typeof parsed.content !== 'string' || !parsed.content.trim() ||
+        !/^\\d{4}-\\d{2}-\\d{2}$/.test(parsed.practiceDate) ||
+        typeof parsed.practiceType !== 'string' ||
+        typeof parsed.storeUrl !== 'string' || !parsed.storeUrl.startsWith('https://')) {
+      throw new Error('승인된 게시글 JSON 형식이 아닙니다.');
+    }
+    post = parsed;
+    status.textContent = 'GitHub 승인 글 불러오기 완료: ' + post.title;
+  } catch(error) {status.textContent = '오류: ' + error.message;}
+});
 const ensurePost = () => {
   if (!post) throw new Error('먼저 승인된 JSON 파일을 선택하세요.');
 };
