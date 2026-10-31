@@ -561,11 +561,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             className:String(el.className||'').slice(0,160)
           })).filter(x=>/발행|등록|게시|공개|저장/.test(x.label)).slice(0,12);
         const card = !!document.querySelector('.se-section-oglink, .se-module-oglink, .se-component.se-oglink, .se-component-oglink');
+        const dateParagraph = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+          .find(p=>/^\\d{4}년 \\d{1,2}월 \\d{1,2}일/.test((p.textContent||'').trim()));
+        const dateText = (dateParagraph?.textContent||'').trim();
+        const dateBold = !!dateParagraph && !!dateText && (() => {
+          const walker = document.createTreeWalker(dateParagraph,NodeFilter.SHOW_TEXT);
+          let node,checked=0;
+          while((node=walker.nextNode()) && checked<dateText.length) {
+            const part=node.textContent||'';
+            if(!part.trim()) continue;
+            const parent=node.parentElement;
+            const weight=parent ? getComputedStyle(parent).fontWeight : '400';
+            const bold=!!parent?.closest('b,strong') || Number(weight)>=600 || weight==='bold';
+            if(!bold) return false;
+            checked+=part.length;
+          }
+          return checked>=dateText.length;
+        })();
         return {editor:!!title,title:(title?.textContent||'').trim().slice(0,100),
           paragraphCount:paragraphs.length,hasDate:paragraphs.some(p=>/^\\d{4}년 \\d{1,2}월 \\d{1,2}일/.test(p)),
           hasStoreUrl:paragraphs.some(p=>p.includes('smartstore.naver.com')),
           hasProse:paragraphs.some(p=>p.length>60&&!p.includes('smartstore.naver.com')),
-          hasCard:card,buttons};
+          hasCard:card,dateBold,buttons};
       }
     });
     const editor = frames.find(f=>f.result?.editor)?.result;
@@ -574,7 +591,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       status:editor?'inspected':'editor-not-found',
       title:editor?.title||'',paragraphCount:editor?.paragraphCount||0,
       hasDate:!!editor?.hasDate,hasStoreUrl:!!editor?.hasStoreUrl,
-      hasProse:!!editor?.hasProse,hasCard:!!editor?.hasCard,
+      hasProse:!!editor?.hasProse,hasCard:!!editor?.hasCard,dateBold:!!editor?.dateBold,
       publishControls:controls,clicked:false,published:false
     }});
   })().catch(error=>sendResponse({ok:false,error:error.message}));
