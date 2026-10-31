@@ -366,6 +366,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
                 type:'mouseReleased',x:offset.x+next.x,y:offset.y+next.y,button:'left',clickCount:1
               });
+              // The new paragraph can inherit bold from the date. Check the
+              // actual caret formatting *after* focusing it, not before.
+              const boldAtCaret = (await chrome.scripting.executeScript({
+                target,world:'MAIN',
+                func:() => {
+                  const selection=window.getSelection();
+                  const node=selection?.anchorNode;
+                  const el=node?.nodeType===Node.ELEMENT_NODE?node:node?.parentElement;
+                  const paragraph=el?.closest('.se-section-text .se-text-paragraph');
+                  if(!paragraph || (paragraph.textContent||'').trim()) return {ready:false};
+                  let bold=false;
+                  for(let cur=el;cur&&cur!==paragraph.parentElement;cur=cur.parentElement){
+                    if(cur.matches?.('b,strong') ||
+                      Number.parseInt(getComputedStyle(cur).fontWeight,10)>=600){bold=true;break;}
+                  }
+                  const commandBold=typeof document.queryCommandState==='function'
+                    ? document.queryCommandState('bold') : false;
+                  return {ready:true,bold:bold||commandBold};
+                }
+              }))[0]?.result;
+              if(!boldAtCaret?.ready){
+                result={status:'url-caret-not-ready',diagnostics:boldAtCaret};
+                break;
+              }
+              if(boldAtCaret.bold){
+                await clickBold();
+                // Toolbar clicks may steal focus. Restore the URL paragraph.
+                await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+                  type:'mousePressed',x:offset.x+next.x,y:offset.y+next.y,button:'left',clickCount:1
+                });
+                await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+                  type:'mouseReleased',x:offset.x+next.x,y:offset.y+next.y,button:'left',clickCount:1
+                });
+              }
               nextParagraphPrepared=true;
             }
             // The store preview is created asynchronously. Wait before typing
