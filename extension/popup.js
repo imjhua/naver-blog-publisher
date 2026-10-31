@@ -22,7 +22,7 @@ document.getElementById('loadGithub').addEventListener('click', async () => {
   try {
     post = null;
     status.textContent = 'GitHub에서 승인 글을 불러오는 중...';
-    const url = 'https://raw.githubusercontent.com/imjhua/naver-blog-publisher/main/posts/example.json';
+    const url = 'https://raw.githubusercontent.com/imjhua/naver-blog-publisher/main/posts/latest.json';
     const response = await fetch(url, {cache:'no-store'});
     if (!response.ok) throw new Error('GitHub 불러오기 실패: HTTP ' + response.status);
     const parsed = await response.json();
@@ -35,7 +35,7 @@ document.getElementById('loadGithub').addEventListener('click', async () => {
       throw new Error('승인된 게시글 JSON 형식이 아닙니다.');
     }
     post = parsed;
-    status.textContent = 'GitHub 승인 글 불러오기 완료: ' + post.title;
+    status.textContent = '최신 승인 글 불러오기 완료: ' + post.title;
   } catch(error) {status.textContent = '오류: ' + error.message;}
 });
 const ensurePost = () => {
