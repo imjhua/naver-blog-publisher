@@ -188,6 +188,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } else {
           // SmartEditor treats embedded newlines in Input.insertText as plain
           // characters. Send each line separately and use real Enter events.
+          // Set bold BEFORE typing the first date paragraph. SmartEditor
+          // preserves typing-format state more reliably than retroactive
+          // selection of its split text nodes.
+          let preBold = false;
+          const clickBold = async () => {
+            const hit = (await chrome.scripting.executeScript({
+              target,
+              func:() => {
+                const buttons = [...document.querySelectorAll('button')];
+                const el = buttons.find(b => /se-bold-toolbar-button/.test(b.className) &&
+                  b.getClientRects().length);
+                if (!el) return null;
+                const r=el.getBoundingClientRect();
+                return {x:r.left+r.width/2,y:r.top+r.height/2};
+              }
+            }))[0]?.result;
+            if (!hit) return false;
+            await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+              type:'mousePressed',x:offset.x+hit.x,y:offset.y+hit.y,button:'left',clickCount:1
+            });
+            await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{
+              type:'mouseReleased',x:offset.x+hit.x,y:offset.y+hit.y,button:'left',clickCount:1
+            });
+            return true;
+          };
+          if (!resumeBody) preBold = await clickBold();
           const lines = resumeBody ? post.content.split('\n') : value.split('\n');
           for (let i = 0; i < lines.length; i++) {
             if (i > 0) {
@@ -199,6 +225,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               });
             }
             if (lines[i]) await chrome.debugger.sendCommand(debuggerTarget,'Input.insertText',{text:lines[i].replace(/\*\*([^*]+)\*\*/g,'$1')});
+            if (!resumeBody && i === 0 && preBold) {
+              // Turn bold off before the URL paragraph begins.
+              await clickBold();
+            }
             // The store preview is created asynchronously. Wait before typing
             // the prose, otherwise SmartEditor may append the card at the end.
             if (!resumeBody && i === 2 && lines[1] === post.storeUrl) {
