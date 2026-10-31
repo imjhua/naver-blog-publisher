@@ -228,6 +228,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               });
             }
             if (lines[i]) await chrome.debugger.sendCommand(debuggerTarget,'Input.insertText',{text:lines[i].replace(/\*\*([^*]+)\*\*/g,'$1')});
+            // Safety gate: verify the first date line before entering the URL or prose.
+            // Never retry insertion into a partially populated SmartEditor document.
+            if (!resumeBody && i === 0) {
+              let dateCheck = {present:false,bold:false};
+              for (let attempt = 0; attempt < 8; attempt++) {
+                dateCheck = (await chrome.scripting.executeScript({
+                  target,
+                  func:(date) => {
+                    const p = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+                      .find(el => (el.textContent || '').trim() === date);
+                    if (!p) return {present:false,bold:false};
+                    const spans = [...p.querySelectorAll('span.__se-node')];
+                    const bold = spans.length > 0 && spans.every(el =>
+                      Number.parseInt(getComputedStyle(el).fontWeight,10) >= 600 ||
+                      /se-bold/.test(el.className) || !!el.closest('strong,b'));
+                    return {present:true,bold};
+                  },
+                  args:[lines[0]]
+                }))[0]?.result || {present:false,bold:false};
+                if (dateCheck.present && dateCheck.bold) break;
+                await new Promise(resolve => setTimeout(resolve,200));
+              }
+              if (!dateCheck.present || !dateCheck.bold) {
+                result = {status:dateCheck.present ? 'date-bold-not-confirmed' : 'date-not-confirmed',
+                  diagnostics:{stage:'before-link-insertion',...dateCheck}};
+                break;
+              }
+            }
             if (!resumeBody && i === 0 && preBold) {
               // Turn bold off before the URL paragraph begins.
               await clickBold();
