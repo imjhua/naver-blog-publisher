@@ -167,10 +167,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               const prose = content.split('\n').find(Boolean);
               const hasProse = paragraphs.some(p => p.includes(prose));
               const card = document.querySelector('.se-section-oglink, .se-module-oglink, .se-component.se-oglink, .se-component-oglink');
-              if (!hasDate || !hasUrl || hasProse || !card) return {safe:false,hasDate,hasUrl,hasProse,card:!!card};
-              card.scrollIntoView({block:'center'});
-              const rect = card.getBoundingClientRect();
-              return {safe:true,x:rect.left+Math.min(rect.width/2,70),y:rect.bottom+14};
+              const urlParagraph = [...document.querySelectorAll('.se-section-text .se-text-paragraph')]
+                .find(p => (p.textContent || '').trim() === url);
+              if (!hasDate || !hasUrl || hasProse || !urlParagraph)
+                return {safe:false,hasDate,hasUrl,hasProse,card:!!card};
+              urlParagraph.scrollIntoView({block:'center'});
+              const rect = urlParagraph.getBoundingClientRect();
+              return {safe:true,x:rect.right-3,y:rect.top+rect.height/2,card:!!card};
             },
             args:[body.split('\n')[0],post.storeUrl,post.content]
           });
@@ -217,6 +220,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return true;
           };
           if (!resumeBody) preBold = await clickBold();
+          if (resumeBody) {
+            // Resume from the end of the existing URL, without duplicating it.
+            for (const [type,key,code,virtual] of [
+              ['rawKeyDown','End','End',35],['keyUp','End','End',35],
+              ['keyDown','Enter','Enter',13],['keyUp','Enter','Enter',13]
+            ]) {
+              await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchKeyEvent',{
+                type,key,code,windowsVirtualKeyCode:virtual,nativeVirtualKeyCode:virtual
+              });
+            }
+          }
           const lines = resumeBody ? post.content.split('\n') : value.split('\n');
           for (let i = 0; i < lines.length; i++) {
             if (i > 0) {
