@@ -42,16 +42,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const other = document.querySelector(otherSelector);
           if (!element || !other) return {status:'selector-missing'};
           const value = element.textContent?.trim() || '';
-          const placeholder = fieldPlaceholder => value === fieldPlaceholder;
-          if (value && !placeholder('제목') && !placeholder('글감과 함께 나의 일상을 기록해보세요!')) {
+          if (value && value !== '제목' && value !== '글감과 함께 나의 일상을 기록해보세요!') {
             return {status:'not-empty',value:value.slice(0,70)};
           }
-          element.click();
-          const frame = document.activeElement;
-          let editable = false;
-          try {editable = frame?.tagName === 'IFRAME' && !!frame.contentDocument?.querySelector('body[contenteditable="true"]');}
-          catch (_) {}
-          return {status:editable ? 'ready' : 'input-frame-missing'};
+          const region = element.closest('.se-title') || element.closest('.se-section-text') || element;
+          region.scrollIntoView({block:'center'});
+          const rect = element.getBoundingClientRect();
+          return {status:rect.width && rect.height ? 'ready' : 'not-visible',
+            x:rect.left+Math.min(rect.width/2,80),y:rect.top+rect.height/2};
         },
         args:[field === 'title' ? config.title : config.body,field === 'title' ? config.body : config.title]
       });
@@ -86,6 +84,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           result = {status:field+'-'+prepared.status,diagnostics:prepared};
           break;
         }
+        // Use a real browser mouse event in the correct nested editor frame.
+        // CDP mouse coordinates are top-level viewport coordinates.
+        const frameOffset = await chrome.scripting.executeScript({
+          target:{tabId:tab.id},
+          func:() => {
+            const iframe = document.querySelector('iframe#mainFrame') ||
+              [...document.querySelectorAll('iframe')].find(f => (f.src || '').includes('PostWriteForm.naver'));
+            if (!iframe) return null;
+            const r = iframe.getBoundingClientRect();
+            return {x:r.left,y:r.top};
+          }
+        });
+        const offset = frameOffset[0]?.result;
+        if (!offset) {
+          result = {status:field+'-frame-offset-missing'};
+          break;
+        }
+        const x = offset.x+prepared.x, y = offset.y+prepared.y;
+        await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});
+        await chrome.debugger.sendCommand(debuggerTarget,'Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});
         await chrome.debugger.sendCommand(debuggerTarget,'Input.insertText',{text:value});
         if (!(await confirm(field,value))) {
           result = {status:field+'-not-confirmed',diagnostics:{method:'debugger-Input.insertText',field}};
