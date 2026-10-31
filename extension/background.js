@@ -1,3 +1,38 @@
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== 'fill-approved-post') return;
+  (async () => {
+    if (!chrome.scripting?.executeScript) {
+      throw new Error('Chrome scripting API 사용 불가. 확장 프로그램을 제거 후 최신 extension 폴더로 다시 로드하세요.');
+    }
+    const post = message.post;
+    if (!post || post.status !== 'approved' || typeof post.title !== 'string' ||
+        typeof post.content !== 'string') throw new Error('승인 글 데이터가 올바르지 않습니다.');
+    const [tab] = await chrome.tabs.query({active:true,lastFocusedWindow:true});
+    if (!tab?.id) throw new Error('활성 탭을 찾지 못했습니다.');
+    // First inspect the document, before injecting any editing code.
+    const frames = await chrome.scripting.executeScript({
+      target:{tabId:tab.id,allFrames:true},
+      func:() => ({
+        host:location.hostname,
+        editor:!!document.querySelector('.se-title-text .se-text-paragraph') &&
+               !!document.querySelector('.se-section-text .se-module-text .se-text-paragraph')
+      })
+    });
+    const matches = frames.filter(frame => frame.result?.host === 'blog.naver.com' && frame.result.editor);
+    if (matches.length !== 1) throw new Error('네이버 에디터 프레임 감지 실패 (' + matches.length + '개).');
+    const frameId = matches[0].frameId;
+    await chrome.scripting.executeScript({
+      target:{tabId:tab.id,frameIds:[frameId]},files:['editor-fill.js']
+    });
+    const results = await chrome.scripting.executeScript({
+      target:{tabId:tab.id,frameIds:[frameId]},
+      func:(approved) => globalThis.fillApprovedPostInFrame?.(approved) ?? {status:'helper-not-loaded'},
+      args:[post]
+    });
+    sendResponse({ok:true,result:results[0]?.result});
+  })().catch(error => sendResponse({ok:false,error:error.message}));
+  return true;
+});
 const POST_URL = 'https://raw.githubusercontent.com/imjhua/naver-blog-publisher/main/posts/latest.json';
 const ALARM_NAME = 'check-approved-post';
 async function checkLatest() {
