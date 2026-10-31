@@ -27,7 +27,7 @@
             label:(el.closest('label')?.innerText||el.getAttribute('aria-label')||el.name||'').trim().slice(0,100)
           }));
         return {title,date:date?.textContent.trim()||'',bold,url,card,
-          paragraphCount:ps.length,finalCount:final.length,settingsOpen:close.length>0,settings};
+          paragraphCount:ps.length,finalCount:final.length,settingsOpen:final.length===1,settings};
       }
     });
     const results=frames.map(x=>x.result).filter(Boolean);
@@ -35,7 +35,7 @@
       results.find(x=>x.title);
     if(!editor)return null;
     // Editor content and publish controls may live in different frames.
-    const panels=results.filter(x=>x.settingsOpen&&x.finalCount>0);
+    const panels=results.filter(x=>x.finalCount>0);
     const panel=panels.length===1?panels[0]:null;
     return {...editor,settingsOpen:!!panel,finalCount:panel?.finalCount||0,
       settings:panel?.settings||[],panelCount:panels.length};
@@ -46,8 +46,9 @@
       func:()=>{
         if(!location.pathname.includes('PostWriteForm.naver'))return null;
         const visible=el=>!!el.getClientRects().length&&getComputedStyle(el).visibility!=='hidden';
-        const close=[...document.querySelectorAll('button[class*="publish_fold_btn__"]')].filter(visible);
-        if(close.length)return {status:'already-open'};
+        const final=[...document.querySelectorAll('button[class*="confirm_btn__"]')]
+          .filter(visible).filter(el=>el.textContent.trim()==='발행'&&!el.disabled);
+        if(final.length===1)return {status:'already-open'};
         const launch=[...document.querySelectorAll('button[class*="publish_btn__"]')]
           .filter(visible).filter(el=>el.textContent.trim()==='발행'&&!el.disabled);
         if(launch.length!==1)return {status:'launcher-not-unique',count:launch.length};
