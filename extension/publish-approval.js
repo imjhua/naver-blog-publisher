@@ -119,6 +119,10 @@
         current.paragraphCount!==snapshot.paragraphCount||!current.bold||
         !current.url||!current.card||!current.settingsOpen||current.finalCount!==1)
         throw Error('발행 직전 상태가 변경됐습니다. 다시 검토해 주세요.');
+      // Store the pending attempt before navigating away from the editor.
+      await chrome.storage.local.set({pendingPublish:{
+        tabId:tab.id,title:snapshot.title,startedAt:Date.now()
+      }});
       const frames=await chrome.scripting.executeScript({
         target:{tabId:tab.id,allFrames:true},
         func:()=>{
