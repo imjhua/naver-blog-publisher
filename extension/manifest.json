@@ -7,7 +7,9 @@
     "scripting",
     "activeTab",
     "tabs",
-    "debugger"
+    "debugger",
+    "alarms",
+    "storage"
   ],
   "action": {
     "default_popup": "popup.html"
