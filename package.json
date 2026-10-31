@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "validate": "tsx src/validate.ts",
-    "publish": "tsx src/publish.ts"
+    "publish": "tsx src/publish.ts",
+    "probe:editor": "tsx src/probe-editor.ts",
+    "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
     "playwright": "^1.58.0",
